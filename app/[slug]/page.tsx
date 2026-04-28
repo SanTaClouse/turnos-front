@@ -30,9 +30,28 @@ async function getServices(tenantId: string): Promise<Service[]> {
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const tenant = await getTenant(params.slug);
   if (!tenant) return { title: "Negocio no encontrado" };
+
+  const title = `${tenant.name} — Reservá tu turno`;
+  const description =
+    tenant.description ??
+    `Reservá tu turno en ${tenant.name} online. Sin esperas, confirmación inmediata.`;
+
   return {
-    title: `${tenant.name} — Reservar turno`,
-    description: tenant.description ?? `Reserva tu turno en ${tenant.name}`,
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      siteName: tenant.name,
+      locale: tenant.locale.replace("-", "_"),
+      // images se rellena automáticamente por Next.js con opengraph-image.tsx
+    },
+    twitter: {
+      card: "summary_large_image",
+      title,
+      description,
+    },
   };
 }
 
