@@ -474,7 +474,7 @@ function LinkStep() {
       <div className="mt-[24px]">
         <div className="bg-surface border border-line rounded p-[18px_16px]">
           <div className="font-mono text-[11px] text-ink-3" style={{ letterSpacing: "0.05em" }}>
-            turnosapp.com/
+            {process.env.FRONT_SHORT}
           </div>
           <input
             value={slug}
