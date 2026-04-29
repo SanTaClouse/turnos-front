@@ -496,7 +496,7 @@ function LinkStep() {
 function DoneStep() {
   const { businessName, slug } = useOnboardingStore();
   const [copied, setCopied] = useState(false);
-  const publicUrl = `turnosapp.com/${slug}`;
+  const publicUrl = process.env.FRONT_SHORT+`/${slug}`;
 
   const copy = async (text: string) => {
     try {
