@@ -191,7 +191,7 @@ function UrlSheet({ tenant, onClose, onSaved }: {
         </p>
         <div className="bg-surface border border-line rounded px-[14px] py-[14px]">
           <div className="font-mono text-[11px] text-ink-3" style={{ letterSpacing: "0.05em" }}>
-            turnosapp.com/
+            turnos-sf.vercel.app/
           </div>
           <input
             value={slug}
@@ -300,7 +300,7 @@ export function AjustesView({ initialTenant }: { initialTenant: Tenant }) {
   const [linkCopied, setLinkCopied] = useState(false);
 
   const initials = getInitials(tenant.name);
-  const publicUrl = `turnosapp.com/${tenant.slug}`;
+  const publicUrl = `turnos-sf.vercel.app/${tenant.slug}`;
 
   const handleSaved = async () => {
     try {
@@ -445,7 +445,7 @@ export function AjustesView({ initialTenant }: { initialTenant: Tenant }) {
         {/* Footer */}
         <div className="text-center pt-[16px]">
           <div className="font-mono text-[10px] text-ink-3" style={{ letterSpacing: "0.05em" }}>
-            TurnosApp · v1.0.0
+            Turnos-sf · v1.0.0
           </div>
         </div>
       </div>
