@@ -29,7 +29,7 @@ export function PWAInstallPrompt() {
       >
         <div className="flex gap-[12px]">
           <div className="w-[40px] h-[40px] rounded-[12px] bg-accent flex items-center justify-center flex-shrink-0">
-            <Icon name="download" size={18} color="var(--bg)" />
+            <Icon name="link" size={18} color="var(--bg)" />
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-medium text-[14px]">Instala Turno1Min</div>
