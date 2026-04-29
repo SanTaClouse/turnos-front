@@ -25,7 +25,7 @@ export default function HomePage() {
         className="mt-[20px] text-[15px] text-ink-2 text-center leading-[1.5]"
         style={{ maxWidth: 280 }}
       >
-        Recibí reservas online. Sin apps, sin fricción.
+        Recibí reservas online. Probalo gratis sin tarjeta.
       </p>
       <div className="mt-[36px] flex flex-col gap-[10px] w-full">
         <Link href="/onboarding" className="w-full">

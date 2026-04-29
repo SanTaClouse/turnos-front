@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
+import { usePushNotifications } from "@/lib/use-push-notifications";
 import type { Appointment, Resource, Service } from "@/types/api";
 import { useAdminStore } from "@/store/admin";
 import { AdminHeader } from "@/components/admin/admin-header";
@@ -70,7 +71,18 @@ function DayView({ appointments, resources, onOpen, onCreateAt }: {
   onOpen: (a: Appointment) => void;
   onCreateAt: (time: string) => void;
 }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const firstApptRef = useRef<HTMLButtonElement>(null);
   const totalHeight = TOTAL_MINS * PX_PER_MIN;
+
+  // Scroll al primer turno cuando cambian los appointments
+  useEffect(() => {
+    if (firstApptRef.current && containerRef.current) {
+      setTimeout(() => {
+        firstApptRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      }, 100);
+    }
+  }, [appointments]);
 
   // Filas horizontales cada hora
   const hourLines = Array.from({ length: END_HOUR - START_HOUR + 1 }, (_, i) => START_HOUR + i);
@@ -131,7 +143,7 @@ function DayView({ appointments, resources, onOpen, onCreateAt }: {
         })}
 
         {/* Bloques de turno con altura proporcional a la duración */}
-        {appointments.map((appt) => {
+        {appointments.map((appt, idx) => {
           const resource = resources.find((r) => r.id === appt.resource_id);
           const startMins = timeToMins(appt.time) - START_HOUR * 60;
           const duration = appt.service?.duration_minutes ?? 30;
@@ -144,8 +156,12 @@ function DayView({ appointments, resources, onOpen, onCreateAt }: {
 
           if (startMins < 0 || startMins >= TOTAL_MINS) return null;
 
+          // Marcar el primer turno para scroll
+          const isFirst = idx === 0;
+
           return (
             <button
+              ref={isFirst ? firstApptRef : null}
               key={appt.id}
               onClick={() => onOpen(appt)}
               className="press-fx absolute left-0 right-0 bg-surface rounded-[8px] px-[10px] py-[6px] flex items-start gap-[8px] text-left overflow-hidden"
@@ -267,13 +283,14 @@ function WeekView({ weekDates, appointments, onDayClick }: {
 }
 
 // ─── Appointment detail sheet ──────────────────────────────
-function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNotesChange }: {
+function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNotesChange, loading }: {
   appt: Appointment | null;
   resources: Resource[];
   onClose: () => void;
   onConfirm: () => void;
   onCancel: () => void;
   onNotesChange: (notes: string) => void;
+  loading?: boolean;
 }) {
   const resource = resources.find((r) => r.id === appt?.resource_id);
   const endTime = appt?.time && appt.service?.duration_minutes
@@ -377,13 +394,14 @@ function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNote
           {/* Actions */}
           <div className="flex flex-col gap-[8px] mt-[20px]">
             {appt.status === "pending" && (
-              <Btn onClick={onConfirm} size="lg" full className="gap-2">
-                <Icon name="check" size={16} color="var(--bg)" /> Confirmar turno
+              <Btn onClick={onConfirm} loading={loading} disabled={loading} size="lg" full className="gap-2">
+                {!loading && <><Icon name="check" size={16} color="var(--bg)" /> Confirmar turno</>}
+                {loading && "Confirmando..."}
               </Btn>
             )}
             {appt.status !== "cancelled" && (
-              <Btn variant="secondary" size="lg" full onClick={onCancel} className="text-danger">
-                Cancelar turno
+              <Btn variant="secondary" size="lg" full onClick={onCancel} loading={loading} disabled={loading} className="text-danger">
+                {!loading ? "Cancelar turno" : "Cancelando..."}
               </Btn>
             )}
           </div>
@@ -535,6 +553,11 @@ export function AgendaView({ resources, services, tenantId }: {
   const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createTime, setCreateTime] = useState<string | null>(null);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+
+  // Push notifications
+  const { isSubscribed, requestPermission } = usePushNotifications(tenantId);
 
   const today = new Date().toISOString().slice(0, 10);
   const isToday = selectedDate === today;
@@ -587,20 +610,36 @@ export function AgendaView({ resources, services, tenantId }: {
   // Actions
   const handleConfirm = async () => {
     if (!selectedAppt) return;
+    setActionLoading(true);
     try {
       await api.patch<Appointment>(`/appointments/${selectedAppt.id}/confirm`, {});
+      setActionSuccess("Turno confirmado");
       await loadAppointments();
       setSelectedAppt(null);
-    } catch { /* silently */ }
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch {
+      setActionSuccess("Error al confirmar");
+      setTimeout(() => setActionSuccess(null), 3000);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleCancel = async () => {
     if (!selectedAppt) return;
+    setActionLoading(true);
     try {
       await api.patch<Appointment>(`/appointments/${selectedAppt.id}/cancel`, {});
+      setActionSuccess("Turno cancelado");
       await loadAppointments();
       setSelectedAppt(null);
-    } catch { /* silently */ }
+      setTimeout(() => setActionSuccess(null), 3000);
+    } catch {
+      setActionSuccess("Error al cancelar");
+      setTimeout(() => setActionSuccess(null), 3000);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleNotesChange = async (notes: string) => {
@@ -621,7 +660,8 @@ export function AgendaView({ resources, services, tenantId }: {
         title={formatDateLabel(selectedDate)}
         subtitle="Agenda"
         notifCount={counts.pending}
-        onNotifClick={() => {}}
+        onEnablePushNotifications={requestPermission}
+        isPushEnabled={isSubscribed}
       />
 
       {/* Date nav + view toggle */}
@@ -752,6 +792,7 @@ export function AgendaView({ resources, services, tenantId }: {
         onConfirm={handleConfirm}
         onCancel={handleCancel}
         onNotesChange={handleNotesChange}
+        loading={actionLoading}
       />
 
       {/* Create sheet */}

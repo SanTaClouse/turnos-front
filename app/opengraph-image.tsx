@@ -3,12 +3,24 @@ import { ImageResponse } from "next/og";
 // force-dynamic evita el prerender en build (que rompe en Windows con paths con espacios).
 // La imagen se genera on-demand cuando alguien la requiere.
 export const dynamic = "force-dynamic";
-export const alt = "Reservá turnos online sin complicaciones";
+export const alt = "Turno1Min · Tu agenda en 1 minuto";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
-export default function OgImage() {
-  // Tokens del design system
+// Cargamos Instrument Serif desde Google Fonts (la fuente de la app real).
+async function loadFont(weight: 400, style: "normal" | "italic" = "normal") {
+  const url = `https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@${
+    style === "italic" ? "1" : "0"
+  }&display=swap`;
+  const css = await (await fetch(url)).text();
+  const match = css.match(/src: url\((.+?)\) format\('(opentype|truetype)'\)/);
+  if (!match) throw new Error("No se pudo resolver la URL de la fuente");
+  const fontData = await (await fetch(match[1])).arrayBuffer();
+  return { name: "Instrument Serif", data: fontData, weight, style };
+}
+
+export default async function OgImage() {
+  // Tokens del design system (idénticos a globals.css)
   const BG = "#fafaf7";
   const SURFACE = "#ffffff";
   const INK_1 = "#0f0f0e";
@@ -16,6 +28,13 @@ export default function OgImage() {
   const INK_3 = "#8a8984";
   const LINE = "#ebeae3";
   const ACCENT = "#e8725a";
+  const CONFIRMED = "#3a7a5c";
+  const CONFIRMED_BG = "#e6f2ea";
+
+  const [serifRegular, serifItalic] = await Promise.all([
+    loadFont(400, "normal"),
+    loadFont(400, "italic"),
+  ]);
 
   return new ImageResponse(
     (
@@ -24,150 +43,339 @@ export default function OgImage() {
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
           background: BG,
-          padding: "96px",
-          fontFamily: "system-ui, -apple-system, sans-serif",
+          fontFamily: '"Inter", system-ui, -apple-system, sans-serif',
           position: "relative",
         }}
       >
-        {/* Top: dots ornamentales */}
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: 999,
-              background: ACCENT,
-            }}
-          />
-          <div
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: 999,
-              background: INK_1,
-              opacity: 0.15,
-            }}
-          />
-          <div
-            style={{
-              width: 14,
-              height: 14,
-              borderRadius: 999,
-              background: INK_1,
-              opacity: 0.15,
-            }}
-          />
-        </div>
-
-        {/* Hero: titular grande + descripción */}
+        {/* ─────────── Columna izquierda: claim ─────────── */}
         <div
           style={{
+            width: 720,
             display: "flex",
             flexDirection: "column",
-            justifyContent: "center",
-            flex: 1,
-            paddingTop: 60,
+            padding: "80px 0 80px 80px",
+            justifyContent: "space-between",
           }}
         >
-          <div
-            style={{
-              fontFamily: "Georgia, serif",
-              fontSize: 110,
-              lineHeight: 1.02,
-              letterSpacing: "-4px",
-              color: INK_1,
-              display: "flex",
-              flexDirection: "column",
-            }}
-          >
-            <div style={{ display: "flex" }}>Reservá tu turno</div>
-            <div style={{ display: "flex" }}>
-              en <span style={{ color: ACCENT, fontStyle: "italic", marginLeft: 18 }}>segundos</span>.
+          {/* Brand mark + wordmark */}
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 14,
+                background: INK_1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: '"Instrument Serif"',
+                fontStyle: "italic",
+                fontSize: 38,
+                lineHeight: 1,
+                paddingBottom: 4,
+              }}
+            >
+              <span style={{ color: BG, display: "flex" }}>T</span>
+              <span style={{ color: ACCENT, display: "flex", marginLeft: 1 }}>1</span>
+            </div>
+            <div
+              style={{
+                fontFamily: '"Instrument Serif"',
+                fontSize: 30,
+                color: INK_1,
+                letterSpacing: "-0.5px",
+                display: "flex",
+              }}
+            >
+              <span>Turno</span>
+              <span style={{ color: ACCENT, fontStyle: "italic" }}>1</span>
+              <span>Min</span>
             </div>
           </div>
+
+          {/* Hero claim */}
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <div
+              style={{
+                fontFamily: '"Instrument Serif"',
+                fontSize: 108,
+                lineHeight: 0.98,
+                letterSpacing: "-3.5px",
+                color: INK_1,
+                display: "flex",
+                flexDirection: "column",
+              }}
+            >
+              <div style={{ display: "flex" }}>Tu agenda,</div>
+              <div style={{ display: "flex" }}>
+                <span>en </span>
+                <span style={{ color: ACCENT, fontStyle: "italic" }}>1 minuto</span>
+                <span>.</span>
+              </div>
+            </div>
+
+            <div
+              style={{
+                fontSize: 26,
+                color: INK_2,
+                marginTop: 32,
+                lineHeight: 1.4,
+                letterSpacing: "-0.3px",
+                maxWidth: 560,
+                display: "flex",
+              }}
+            >
+              Recibí reservas online sin apps, sin fricción.
+              Tus clientes reservan en segundos.
+            </div>
+          </div>
+
+          {/* Footer con URL */}
           <div
             style={{
-              fontSize: 30,
-              color: INK_2,
-              marginTop: 36,
-              lineHeight: 1.4,
-              letterSpacing: "-0.4px",
-              maxWidth: 900,
               display: "flex",
+              alignItems: "center",
+              gap: 14,
+              fontFamily: "ui-monospace, Menlo, monospace",
+              fontSize: 16,
+              color: INK_3,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
             }}
           >
-            Sin apps, sin esperas. Confirmación inmediata por email.
+            <span style={{ display: "flex" }}>turno1min.app</span>
+            <div
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: 99,
+                background: INK_3,
+                opacity: 0.5,
+              }}
+            />
+            <span style={{ display: "flex" }}>Probalo gratis</span>
           </div>
         </div>
 
-        {/* Bottom: tarjetas con ejemplos de turnos */}
+        {/* ─────────── Columna derecha: mockup de la agenda ─────────── */}
         <div
           style={{
+            flex: 1,
             display: "flex",
-            gap: 14,
-            marginTop: "auto",
+            alignItems: "center",
+            justifyContent: "center",
+            background: `linear-gradient(180deg, ${BG} 0%, #f4f2ea 100%)`,
+            borderLeft: `1px solid ${LINE}`,
+            padding: "80px 60px",
+            position: "relative",
           }}
         >
-          {[
-            { time: "10:00", svc: "Corte", who: "Carlos", color: "#e8b89c" },
-            { time: "10:30", svc: "Corte + barba", who: "Martín", color: "#a8c8d4" },
-            { time: "11:00", svc: "Diseño cejas", who: "Julia", color: "#e8b8c8" },
-          ].map((s, i) => (
+          {/* Card flotante: agenda del día */}
+          <div
+            style={{
+              width: 380,
+              background: SURFACE,
+              borderRadius: 22,
+              border: `1px solid ${LINE}`,
+              boxShadow:
+                "0 30px 60px -20px rgba(15,15,14,0.12), 0 12px 24px -10px rgba(15,15,14,0.08)",
+              padding: 28,
+              display: "flex",
+              flexDirection: "column",
+              gap: 20,
+              transform: "rotate(-1.5deg)",
+            }}
+          >
+            {/* Header del card */}
             <div
-              key={i}
               style={{
-                flex: 1,
-                background: SURFACE,
-                border: `1px solid ${LINE}`,
-                borderLeft: `4px solid ${i === 0 ? "#3a7a5c" : "#c08a2e"}`,
-                borderRadius: 14,
-                padding: "20px 22px",
                 display: "flex",
-                flexDirection: "column",
-                gap: 6,
+                justifyContent: "space-between",
+                alignItems: "flex-end",
               }}
             >
+              <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                <div
+                  style={{
+                    fontFamily: "ui-monospace, Menlo, monospace",
+                    fontSize: 11,
+                    color: INK_3,
+                    letterSpacing: "0.1em",
+                    textTransform: "uppercase",
+                    display: "flex",
+                  }}
+                >
+                  Agenda
+                </div>
+                <div
+                  style={{
+                    fontFamily: '"Instrument Serif"',
+                    fontSize: 32,
+                    color: INK_1,
+                    letterSpacing: "-0.5px",
+                    lineHeight: 1,
+                    display: "flex",
+                  }}
+                >
+                  Hoy
+                </div>
+              </div>
               <div
                 style={{
-                  fontFamily: "ui-monospace, Menlo, monospace",
-                  fontSize: 22,
-                  color: INK_1,
-                  fontWeight: 600,
-                  letterSpacing: "-0.5px",
-                  display: "flex",
-                }}
-              >
-                {s.time}
-              </div>
-              <div style={{ fontSize: 20, color: INK_1, fontWeight: 500, display: "flex" }}>
-                {s.svc}
-              </div>
-              <div
-                style={{
-                  fontSize: 16,
-                  color: INK_3,
                   display: "flex",
                   alignItems: "center",
                   gap: 6,
+                  background: CONFIRMED_BG,
+                  color: CONFIRMED,
+                  padding: "5px 10px",
+                  borderRadius: 99,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  letterSpacing: "-0.1px",
                 }}
               >
                 <div
                   style={{
-                    width: 14,
-                    height: 14,
-                    borderRadius: 999,
-                    background: s.color,
+                    width: 6,
+                    height: 6,
+                    borderRadius: 99,
+                    background: CONFIRMED,
                   }}
                 />
-                con {s.who}
+                <span style={{ display: "flex" }}>8 turnos</span>
               </div>
             </div>
-          ))}
+
+            {/* Lista de turnos */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {[
+                { time: "10:00", svc: "Corte clásico", who: "Laura Méndez", hue: "#e8b89c", status: "confirmed" },
+                { time: "10:30", svc: "Corte + barba", who: "Martín R.", hue: "#a8c8d4", status: "confirmed" },
+                { time: "11:00", svc: "Diseño de cejas", who: "Julia P.", hue: "#e8b8c8", status: "pending" },
+              ].map((s, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 14,
+                    padding: "14px 16px",
+                    background: BG,
+                    borderRadius: 12,
+                    borderLeft: `3px solid ${
+                      s.status === "confirmed" ? CONFIRMED : "#c08a2e"
+                    }`,
+                  }}
+                >
+                  <div
+                    style={{
+                      fontFamily: "ui-monospace, Menlo, monospace",
+                      fontSize: 14,
+                      color: INK_1,
+                      fontWeight: 600,
+                      width: 48,
+                      display: "flex",
+                    }}
+                  >
+                    {s.time}
+                  </div>
+                  <div
+                    style={{
+                      flex: 1,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 2,
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: 14,
+                        color: INK_1,
+                        fontWeight: 500,
+                        letterSpacing: "-0.2px",
+                        display: "flex",
+                      }}
+                    >
+                      {s.svc}
+                    </div>
+                    <div
+                      style={{
+                        fontSize: 12,
+                        color: INK_3,
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: 99,
+                          background: s.hue,
+                        }}
+                      />
+                      <span style={{ display: "flex" }}>{s.who}</span>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Footer del card */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                paddingTop: 4,
+                borderTop: `1px solid ${LINE}`,
+                marginTop: 4,
+                paddingTop: 16,
+              }}
+            >
+              <div
+                style={{
+                  fontSize: 13,
+                  color: INK_2,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 8,
+                }}
+              >
+                <div
+                  style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 99,
+                    background: ACCENT,
+                  }}
+                />
+                <span style={{ display: "flex" }}>Próximo en 42 min</span>
+              </div>
+              <div
+                style={{
+                  fontSize: 12,
+                  color: INK_3,
+                  fontFamily: "ui-monospace, Menlo, monospace",
+                  letterSpacing: "0.04em",
+                  display: "flex",
+                }}
+              >
+                +5 más
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     ),
-    size,
+    {
+      ...size,
+      fonts: [
+        { ...serifRegular, name: "Instrument Serif" },
+        { ...serifItalic, name: "Instrument Serif" },
+      ],
+    },
   );
 }

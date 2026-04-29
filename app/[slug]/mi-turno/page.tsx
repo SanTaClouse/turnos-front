@@ -539,6 +539,47 @@ export default function MiTurnoPage({ params }: { params: { slug: string } }) {
         const t = await api.get<Tenant>(`/tenants/slug/${params.slug}`);
         if (cancelled) return;
         setTenant(t);
+
+        // Verificar si hay token + appointmentId en query params (desde email)
+        if (typeof window !== "undefined") {
+          const urlParams = new URLSearchParams(window.location.search);
+          const tokenFromEmail = urlParams.get("token");
+          const appointmentId = urlParams.get("appointmentId");
+
+          if (tokenFromEmail && appointmentId) {
+            // Auto-verificar usando el token del email
+            setStage("loading");
+            try {
+              // Llamar al backend para verificar el token
+              const result = await api.post<{ verified: true }>(`/appointments/${appointmentId}/verify-by-token`, {
+                token: tokenFromEmail,
+              });
+
+              if (result.verified) {
+                // Token verificado, guardar sesión temporal y mostrar lista
+                // Para esto, necesitamos obtener el email del turno desde el backend
+                const appt = await api.get<Appointment>(`/appointments/${appointmentId}`);
+                if (appt.client?.email) {
+                  const expiresAt = Date.now() + 30 * 24 * 60 * 60 * 1000;
+                  saveSession({
+                    email: appt.client.email,
+                    token: "verified-by-email-token",
+                    expiresAt,
+                  });
+                  setEmail(appt.client.email);
+                  setStage("list");
+                  return;
+                }
+              }
+            } catch {
+              // Token inválido o expirado, mostrar email form
+              setStage("email");
+              return;
+            }
+          }
+        }
+
+        // Restaurar sesión normal si existe
         const session = loadSession();
         if (session) {
           setEmail(session.email);

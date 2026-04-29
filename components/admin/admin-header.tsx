@@ -8,9 +8,11 @@ interface AdminHeaderProps {
   notifCount?: number;
   onNotifClick?: () => void;
   rightAction?: React.ReactNode;
+  onEnablePushNotifications?: () => void;
+  isPushEnabled?: boolean;
 }
 
-export function AdminHeader({ title, subtitle, notifCount = 0, onNotifClick, rightAction }: AdminHeaderProps) {
+export function AdminHeader({ title, subtitle, notifCount = 0, onNotifClick, rightAction, onEnablePushNotifications, isPushEnabled }: AdminHeaderProps) {
   return (
     <div className="flex-shrink-0 px-[20px] pt-[8px] pb-[12px] bg-bg">
       <div className="flex items-center gap-[12px] min-h-[44px]">
@@ -23,7 +25,22 @@ export function AdminHeader({ title, subtitle, notifCount = 0, onNotifClick, rig
           </div>
         </div>
         {rightAction}
-        {onNotifClick && (
+        {onEnablePushNotifications && !isPushEnabled && (
+          <button
+            onClick={onEnablePushNotifications}
+            className="press-fx w-[40px] h-[40px] rounded-full bg-surface border border-line flex items-center justify-center"
+            aria-label="Habilitar notificaciones"
+            title="Habilitar notificaciones push"
+          >
+            <Icon name="bell" size={18} color="var(--ink-3)" />
+          </button>
+        )}
+        {isPushEnabled && (
+          <div className="w-[40px] h-[40px] rounded-full bg-surface border border-line flex items-center justify-center">
+            <Icon name="bell" size={18} color="var(--accent)" />
+          </div>
+        )}
+        {onNotifClick && !onEnablePushNotifications && (
           <button
             onClick={onNotifClick}
             className="press-fx relative w-[40px] h-[40px] rounded-full bg-surface border border-line flex items-center justify-center"
