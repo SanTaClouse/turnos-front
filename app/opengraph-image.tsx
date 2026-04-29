@@ -1,23 +1,9 @@
 import { ImageResponse } from "next/og";
 
-// force-dynamic evita el prerender en build (que rompe en Windows con paths con espacios).
-// La imagen se genera on-demand cuando alguien la requiere.
 export const dynamic = "force-dynamic";
 export const alt = "Turno1Min · Tu agenda en 1 minuto";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
-
-// Cargamos Instrument Serif desde Google Fonts (la fuente de la app real).
-async function loadFont(weight: 400, style: "normal" | "italic" = "normal") {
-  const url = `https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@${
-    style === "italic" ? "1" : "0"
-  }&display=swap`;
-  const css = await (await fetch(url)).text();
-  const match = css.match(/src: url\((.+?)\) format\('(opentype|truetype)'\)/);
-  if (!match) throw new Error("No se pudo resolver la URL de la fuente");
-  const fontData = await (await fetch(match[1])).arrayBuffer();
-  return { name: "Instrument Serif", data: fontData, weight, style };
-}
 
 export default async function OgImage() {
   // Tokens del design system (idénticos a globals.css)
@@ -30,11 +16,6 @@ export default async function OgImage() {
   const ACCENT = "#e8725a";
   const CONFIRMED = "#3a7a5c";
   const CONFIRMED_BG = "#e6f2ea";
-
-  const [serifRegular, serifItalic] = await Promise.all([
-    loadFont(400, "normal"),
-    loadFont(400, "italic"),
-  ]);
 
   return new ImageResponse(
     (
@@ -371,10 +352,6 @@ export default async function OgImage() {
     ),
     {
       ...size,
-      fonts: [
-        { ...serifRegular, name: "Instrument Serif" },
-        { ...serifItalic, name: "Instrument Serif" },
-      ],
     },
   );
 }
