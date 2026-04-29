@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { setTenantCookie } from "@/app/actions";
 import { getFrontendDomain } from "@/lib/config";
+import { detectLocationConfig } from "@/lib/timezone-utils";
 import { useOnboardingStore, type DraftService, type DraftResource } from "@/store/onboarding";
 import type { Tenant, Service, Resource } from "@/types/api";
 import { Btn } from "@/components/ui/btn";
@@ -601,15 +602,18 @@ export function OnboardingWizard() {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      // Auto-detectar location (timezone, currency, locale) del navegador
+      const locationConfig = detectLocationConfig();
+
       // 1. Tenant
       const tenant = await api.post<Tenant>("/tenants", {
         name: store.businessName.trim(),
         slug: store.slug,
         whatsapp_number: store.whatsapp,
         address: store.address.trim() || undefined,
-        timezone: "America/Argentina/Buenos_Aires",
-        currency: "ARS",
-        locale: "es-AR",
+        timezone: locationConfig.timezone,
+        currency: locationConfig.currency,
+        locale: locationConfig.locale,
         is_public: true,
       });
 

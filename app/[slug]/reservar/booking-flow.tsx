@@ -283,21 +283,23 @@ function TimeSkeleton() {
 // ─── Step: Datos del cliente ───────────────────────────────
 function StepDetails({ initial, onContinue, countryCode = "+54" }: {
   initial: { name: string; phone: string; email: string; notes: string };
-  onContinue: (name: string, phone: string, email: string, notes: string) => void;
+  onContinue: (name: string, phone: string, email: string, notes: string, country: string) => void;
   countryCode?: string;
 }) {
   const [phone, setPhone] = useState(initial.phone);
   const [name, setName] = useState(initial.name);
   const [email, setEmail] = useState(initial.email);
   const [notes, setNotes] = useState(initial.notes);
+  const [country, setCountry] = useState(countryCode);
 
   const emailValid = !email || /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   const ok = phone.length >= 8 && name.length >= 2 && emailValid;
 
   const inputClass = "w-full h-[48px] border border-line bg-surface rounded-sm px-[14px] text-[15px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent";
 
-  const countryEmojis: Record<string, string> = { "+54": "🇦🇷", "+52": "🇲🇽", "+55": "🇧🇷", "+1": "🇺🇸" };
-  const emoji = countryEmojis[countryCode] || "🌐";
+  const countryEmojis: Record<string, string> = { "+54": "🇦🇷", "+52": "🇲🇽", "+55": "🇧🇷", "+1": "🇺🇸", "+56": "🇨🇱", "+57": "🇨🇴", "+58": "🇻🇪", "+34": "🇪🇸" };
+  const emoji = countryEmojis[country] || "🌐";
+  const countryOptions = ["+54", "+52", "+55", "+1", "+56", "+57", "+58", "+34"];
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 30, delay: 0.2 }}
@@ -308,9 +310,18 @@ function StepDetails({ initial, onContinue, countryCode = "+54" }: {
           <label className="text-[12px] font-medium text-ink-2">Teléfono</label>
         </div>
         <div className="flex gap-[6px]">
-          <div className="flex items-center px-[12px] h-[48px] border border-line bg-surface rounded-sm text-[14px] font-medium whitespace-nowrap flex-shrink-0">
-            {emoji} {countryCode}
-          </div>
+          <select
+            value={country}
+            onChange={(e) => setCountry(e.target.value)}
+            className="h-[48px] border border-line bg-surface rounded-sm px-[10px] text-[14px] font-medium text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent flex-shrink-0"
+            style={{ fontFamily: "inherit" }}
+          >
+            {countryOptions.map((cc) => (
+              <option key={cc} value={cc}>
+                {countryEmojis[cc] || "🌐"} {cc}
+              </option>
+            ))}
+          </select>
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
@@ -371,7 +382,7 @@ function StepDetails({ initial, onContinue, countryCode = "+54" }: {
         />
       </div>
 
-      <Btn onClick={() => onContinue(name, phone, email, notes)} disabled={!ok} size="lg" full className="mt-[6px] gap-2">
+      <Btn onClick={() => onContinue(name, phone, email, notes, country)} disabled={!ok} size="lg" full className="mt-[6px] gap-2">
         Revisar reserva <Icon name="forward" size={16} color="var(--bg)" />
       </Btn>
     </motion.div>
@@ -501,8 +512,11 @@ export function BookingFlow({ tenant, services, resources }: {
     goNext();
   };
 
-  const handleDetails = (name: string, phone: string, email: string, notes: string) => {
+  const [selectedCountry, setSelectedCountry] = useState(tenant.country_code || "+54");
+
+  const handleDetails = (name: string, phone: string, email: string, notes: string, country: string) => {
     store.setDetails(name, phone, email, notes);
+    setSelectedCountry(country);
     goNext();
   };
 
@@ -510,7 +524,7 @@ export function BookingFlow({ tenant, services, resources }: {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const countryCode = tenant.country_code || "+54";
+      const countryCode = selectedCountry || tenant.country_code || "+54";
       const appt = await api.post<{ id: string }>("/appointments", {
         tenant_id: tenant.id,
         service_id: store.serviceId,
@@ -634,7 +648,7 @@ export function BookingFlow({ tenant, services, resources }: {
               email: store.clientEmail,
               notes: store.notes,
             }}
-            onContinue={handleDetails}
+            onContinue={(name, phone, email, notes, country) => handleDetails(name, phone, email, notes, country)}
             countryCode={tenant.country_code || "+54"}
           />
         )}
