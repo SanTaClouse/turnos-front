@@ -331,8 +331,7 @@ export default async function OgImage() {
                 justifyContent: "space-between",
                 paddingTop: 4,
                 borderTop: `1px solid ${LINE}`,
-                marginTop: 4,
-                paddingTop: 16,
+                marginTop: 4
               }}
             >
               <div
