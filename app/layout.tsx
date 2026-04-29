@@ -21,9 +21,40 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
 });
 
+// Sin un dominio real todavía, usamos VERCEL_URL como fallback automático.
+// Cuando tengas tu propio dominio, configurá NEXT_PUBLIC_SITE_URL.
+const siteUrl =
+  process.env.NEXT_PUBLIC_SITE_URL ??
+  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3001");
+
 export const metadata: Metadata = {
-  title: "TurnosApp",
-  description: "Reserva turnos online para tu negocio",
+  metadataBase: new URL(siteUrl),
+  title: {
+    default: "Reservá tu turno online",
+    template: "%s",
+  },
+  description:
+    "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email.",
+  applicationName: "Turnos",
+  authors: [{ name: "Turnos" }],
+  openGraph: {
+    type: "website",
+    locale: "es_AR",
+    title: "Reservá tu turno online",
+    description:
+      "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email.",
+    siteName: "Turnos",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Reservá tu turno online",
+    description:
+      "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email.",
+  },
+  robots: {
+    index: true,
+    follow: true,
+  },
   manifest: "/manifest.json",
 };
 

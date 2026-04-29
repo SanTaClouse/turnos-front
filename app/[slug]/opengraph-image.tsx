@@ -2,7 +2,6 @@ import { ImageResponse } from "next/og";
 import { api } from "@/lib/api";
 import type { Tenant } from "@/types/api";
 
-export const runtime = "nodejs";
 export const alt = "Reservá tu turno online";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";

@@ -59,7 +59,7 @@ interface OnboardingStore {
 const initial = {
   step: 0,
   businessName: "",
-  category: "Barbería",
+  category: "Barbería / Peluquería",
   whatsapp: "",
   address: "",
   services: [

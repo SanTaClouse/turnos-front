@@ -13,7 +13,14 @@ import { ResourceAvatar } from "@/components/ui/resource-avatar";
 
 const HUE_OPTIONS = [24, 60, 140, 180, 220, 280, 340];
 const STEPS = ["welcome", "business", "services", "resources", "hours", "link", "done"] as const;
-const CATEGORIES = ["Barbería", "Peluquería", "Spa", "Estética", "Consultorio", "Otro"];
+const CATEGORIES = [
+  "Barbería / Peluquería",
+  "Spa",
+  "Estética",
+  "Consultorio",
+  "Tatuajes",
+  "Otro",
+];
 const DAY_LABELS = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
 const DAY_DOW = [1, 2, 3, 4, 5, 6, 0]; // mapeo UI → backend (0=domingo en backend)
 
