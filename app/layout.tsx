@@ -35,26 +35,26 @@ const siteUrl =
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
   title: {
-    default: "Reservá tu turno online",
+    default: "Turno1Min - Reservá tu turno online",
     template: "%s",
   },
   description:
-    "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email.",
-  applicationName: "Turnos",
-  authors: [{ name: "Turnos" }],
+    "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email y WhatsApp.",
+  applicationName: "Turno1Min",
+  authors: [{ name: "Turno1Min" }],
   openGraph: {
     type: "website",
     locale: "es_AR",
     title: "Reservá tu turno online",
     description:
-      "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email.",
-    siteName: "Turnos",
+      "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email y WhatsApp.",
+    siteName: "Turno1Min",
   },
   twitter: {
     card: "summary_large_image",
     title: "Reservá tu turno online",
     description:
-      "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email.",
+      "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email y WhatsApp.",
   },
   robots: {
     index: true,

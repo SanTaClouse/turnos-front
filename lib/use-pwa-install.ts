@@ -1,5 +1,10 @@
 import { useEffect, useState, useRef } from "react";
 
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
+
 interface UseInstallPromptReturn {
   canInstall: boolean;
   isInstalled: boolean;
