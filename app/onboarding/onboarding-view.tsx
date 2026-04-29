@@ -496,7 +496,7 @@ function LinkStep() {
 function DoneStep() {
   const { businessName, slug } = useOnboardingStore();
   const [copied, setCopied] = useState(false);
-  const publicUrl = process.env.FRONT_SHORT+`/${slug}`;
+  const publicUrl = process.env.NEXT_PUBLIC_FRONT_SHORT+`/${slug}`;
 
   const copy = async (text: string) => {
     try {
