@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
 import { setTenantCookie } from "@/app/actions";
+import { getFrontendDomain } from "@/lib/config";
 import { useOnboardingStore, type DraftService, type DraftResource } from "@/store/onboarding";
 import type { Tenant, Service, Resource } from "@/types/api";
 import { Btn } from "@/components/ui/btn";
@@ -474,7 +475,7 @@ function LinkStep() {
       <div className="mt-[24px]">
         <div className="bg-surface border border-line rounded p-[18px_16px]">
           <div className="font-mono text-[11px] text-ink-3" style={{ letterSpacing: "0.05em" }}>
-            turnos-sf.vercel.app/
+            {getFrontendDomain()}/
           </div>
           <input
             value={slug}
@@ -496,8 +497,7 @@ function LinkStep() {
 function DoneStep() {
   const { businessName, slug } = useOnboardingStore();
   const [copied, setCopied] = useState(false);
-  // const publicUrl = process.env.NEXT_PUBLIC_FRONT_SHORT+`/${slug}`; La comento por que tuve muchos problemas
-  const publicUrl = `turnos-sf.vercel.app/${slug}`;
+  const publicUrl = `${getFrontendDomain()}/${slug}`;
 
 
   const copy = async (text: string) => {

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
 import { clearTenantCookie } from "@/app/actions";
+import { getFrontendDomain } from "@/lib/config";
 import type { Tenant } from "@/types/api";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
@@ -191,7 +192,7 @@ function UrlSheet({ tenant, onClose, onSaved }: {
         </p>
         <div className="bg-surface border border-line rounded px-[14px] py-[14px]">
           <div className="font-mono text-[11px] text-ink-3" style={{ letterSpacing: "0.05em" }}>
-            turnos-sf.vercel.app/
+            {getFrontendDomain()}/
           </div>
           <input
             value={slug}
@@ -312,7 +313,7 @@ export function AjustesView({ initialTenant }: { initialTenant: Tenant }) {
   const [linkCopied, setLinkCopied] = useState(false);
 
   const initials = getInitials(tenant.name);
-  const publicUrl = `turnos-sf.vercel.app/${tenant.slug}`;
+  const publicUrl = `${getFrontendDomain()}/${tenant.slug}`;
 
   const handleSaved = async () => {
     try {
