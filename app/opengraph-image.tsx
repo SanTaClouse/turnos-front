@@ -329,7 +329,7 @@ export default async function OgImage() {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "space-between",
-                paddingTop: 4,
+                paddingTop: 16,
                 borderTop: `1px solid ${LINE}`,
                 marginTop: 4
               }}
