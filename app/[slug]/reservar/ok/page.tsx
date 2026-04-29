@@ -252,7 +252,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
           transition={{ delay: 1.0, duration: 0.4 }}
           className="mt-[20px] flex items-start gap-[12px] px-[14px] py-[12px] bg-accent/10 border border-accent rounded-[12px]"
         >
-          <Icon name="camera" size={18} color="var(--accent)" className="flex-shrink-0 mt-[1px]" />
+          <Icon name="image" size={18} color="var(--accent)" className="flex-shrink-0 mt-[1px]" />
           <p className="text-[13px] text-ink-2 leading-[1.5]">
             <strong>Sacá una captura de pantalla</strong> para no perderlo. Te enviamos el detalle por email también.
           </p>
