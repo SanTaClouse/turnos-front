@@ -24,6 +24,7 @@ export interface ConfirmedSnapshot extends BookingChoice {
   tenantName: string;
   tenantAddress: string | null;
   tenantInitials: string;
+  countryCode: string;
   confirmedAt: string;
 }
 
@@ -37,7 +38,7 @@ interface BookingStore extends BookingChoice {
   setDetails: (name: string, phone: string, email: string, notes: string) => void;
   nextStep: () => void;
   goToStep: (step: number) => void;
-  confirm: (appointmentId: string, tenantName: string, tenantAddress: string | null, tenantInitials: string) => void;
+  confirm: (appointmentId: string, tenantName: string, tenantAddress: string | null, tenantInitials: string, countryCode?: string) => void;
   reset: () => void;
 }
 
@@ -78,7 +79,7 @@ export const useBookingStore = create<BookingStore>()(
 
       goToStep: (step) => set({ step }),
 
-      confirm: (appointmentId, tenantName, tenantAddress, tenantInitials) => {
+      confirm: (appointmentId, tenantName, tenantAddress, tenantInitials, countryCode = "+54") => {
         const s = get();
         set({
           confirmed: {
@@ -86,6 +87,7 @@ export const useBookingStore = create<BookingStore>()(
             tenantName,
             tenantAddress,
             tenantInitials,
+            countryCode,
             confirmedAt: new Date().toISOString(),
             serviceId: s.serviceId,
             serviceName: s.serviceName,

@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter_Tight, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { PWAInstallPrompt } from "@/components/ui/pwa-install-prompt";
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
@@ -21,11 +22,15 @@ const jetbrainsMono = JetBrains_Mono({
   variable: "--font-jetbrains-mono",
 });
 
-// Sin un dominio real todavía, usamos VERCEL_URL como fallback automático.
-// Cuando tengas tu propio dominio, configurá NEXT_PUBLIC_SITE_URL.
+// URL del sitio: usa NEXT_PUBLIC_FRONT_SHORT (ej: turno1min.app), VERCEL_URL, o localhost
 const siteUrl =
-  process.env.NEXT_PUBLIC_SITE_URL ??
-  (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3001");
+  process.env.NEXT_PUBLIC_FRONT_SHORT
+    ? `https://${process.env.NEXT_PUBLIC_FRONT_SHORT}`
+    : process.env.NEXT_PUBLIC_SITE_URL
+      ? process.env.NEXT_PUBLIC_SITE_URL
+      : process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "http://localhost:3001";
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
@@ -75,7 +80,16 @@ export default function RootLayout({
       lang="es"
       className={`${interTight.variable} ${instrumentSerif.variable} ${jetbrainsMono.variable}`}
     >
-      <body className="bg-bg text-ink-1 antialiased">{children}</body>
+      <head>
+        <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="Turno1Min" />
+      </head>
+      <body className="bg-bg text-ink-1 antialiased">
+        {children}
+        <PWAInstallPrompt />
+      </body>
     </html>
   );
 }

@@ -65,7 +65,7 @@ function WelcomeStep() {
           className="font-serif text-[36px] leading-[1.05] text-balance"
           style={{ letterSpacing: "-1px" }}
         >
-          Bienvenido a<br />TurnosApp.
+          Bienvenido a<br />Turno1Min.
         </h1>
         <p
           className="text-[15px] text-ink-2 leading-[1.5] text-balance mt-[14px] mx-auto"

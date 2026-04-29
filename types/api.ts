@@ -3,6 +3,7 @@ export interface Tenant {
   name: string;
   slug: string;
   whatsapp_number: string;
+  country_code?: string;
   timezone: string;
   currency: string;
   locale: string;

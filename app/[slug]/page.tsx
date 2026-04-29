@@ -191,7 +191,7 @@ export default async function LandingPage({ params }: Props) {
 
         {/* ── Footer ── */}
         <div className="px-[28px] pt-[32px] pb-[40px] text-center">
-          <div className="label-mono">Gestionado por TurnosApp</div>
+          <div className="label-mono">Gestionado por Turno1Min</div>
           <Link
             href={`/${params.slug}/mi-turno`}
             className="inline-block mt-[16px] text-[13px] text-ink-2 underline underline-offset-4"

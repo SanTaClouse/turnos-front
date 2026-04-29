@@ -281,9 +281,10 @@ function TimeSkeleton() {
 }
 
 // ─── Step: Datos del cliente ───────────────────────────────
-function StepDetails({ initial, onContinue }: {
+function StepDetails({ initial, onContinue, countryCode = "+54" }: {
   initial: { name: string; phone: string; email: string; notes: string };
   onContinue: (name: string, phone: string, email: string, notes: string) => void;
+  countryCode?: string;
 }) {
   const [phone, setPhone] = useState(initial.phone);
   const [name, setName] = useState(initial.name);
@@ -295,6 +296,9 @@ function StepDetails({ initial, onContinue }: {
 
   const inputClass = "w-full h-[48px] border border-line bg-surface rounded-sm px-[14px] text-[15px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent";
 
+  const countryEmojis: Record<string, string> = { "+54": "🇦🇷", "+52": "🇲🇽", "+55": "🇧🇷", "+1": "🇺🇸" };
+  const emoji = countryEmojis[countryCode] || "🌐";
+
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 30, delay: 0.2 }}
       className="mt-[14px] flex flex-col gap-[10px]">
@@ -305,7 +309,7 @@ function StepDetails({ initial, onContinue }: {
         </div>
         <div className="flex gap-[6px]">
           <div className="flex items-center px-[12px] h-[48px] border border-line bg-surface rounded-sm text-[14px] font-medium whitespace-nowrap flex-shrink-0">
-            🇦🇷 +54
+            {emoji} {countryCode}
           </div>
           <input
             value={phone}
@@ -375,12 +379,13 @@ function StepDetails({ initial, onContinue }: {
 }
 
 // ─── Step: Resumen ─────────────────────────────────────────
-function StepReview({ choice, onConfirm, onEdit, submitting, error }: {
+function StepReview({ choice, onConfirm, onEdit, submitting, error, tenant }: {
   choice: ReturnType<typeof useBookingStore.getState>;
   onConfirm: () => void;
   onEdit: (step: number) => void;
   submitting: boolean;
   error: string | null;
+  tenant: Tenant;
 }) {
   const endTime = choice.time && choice.serviceDuration
     ? addMinutes(choice.time, choice.serviceDuration)
@@ -394,7 +399,7 @@ function StepReview({ choice, onConfirm, onEdit, submitting, error }: {
         <SummaryRow icon="scissors" label="Servicio" value={choice.serviceName ?? ""} meta={`${choice.serviceDuration} min`} onEdit={() => onEdit(0)} />
         <SummaryRow icon="calendar" label="Fecha" value={choice.date ? formatDate(choice.date) : ""} onEdit={() => onEdit(1)} />
         <SummaryRow icon="clock" label="Horario" value={`${choice.time} – ${endTime}`} meta={choice.resourceName ? `con ${choice.resourceName}` : undefined} onEdit={() => onEdit(2)} />
-        <SummaryRow icon="user" label="A nombre de" value={choice.clientName} meta={`+54 ${choice.clientPhone}`} onEdit={() => onEdit(3)} isLast />
+        <SummaryRow icon="user" label="A nombre de" value={choice.clientName} meta={`${tenant.country_code || "+54"} ${choice.clientPhone}`} onEdit={() => onEdit(3)} isLast />
       </div>
 
       <div className="mt-[14px] flex items-start gap-[10px] px-[14px] py-[12px] border border-dashed border-line rounded-[12px]">
@@ -505,19 +510,20 @@ export function BookingFlow({ tenant, services, resources }: {
     setSubmitting(true);
     setSubmitError(null);
     try {
+      const countryCode = tenant.country_code || "+54";
       const appt = await api.post<{ id: string }>("/appointments", {
         tenant_id: tenant.id,
         service_id: store.serviceId,
         resource_id: store.resourceId,
         date: store.date,
         time: store.time,
-        client_phone: `+54${store.clientPhone.replace(/\D/g, "")}`,
+        client_phone: `${countryCode}${store.clientPhone.replace(/\D/g, "")}`,
         client_name: store.clientName,
         client_email: store.clientEmail.trim() || undefined,
         notes: store.notes || undefined,
         source: "web",
       });
-      store.confirm(appt.id, tenant.name, tenant.address, initials);
+      store.confirm(appt.id, tenant.name, tenant.address, initials, countryCode);
       router.push(`/${tenant.slug}/reservar/ok`);
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "No se pudo confirmar. Intentá de nuevo.");
@@ -618,7 +624,7 @@ export function BookingFlow({ tenant, services, resources }: {
           <AssistantMsg delay={100}>Último paso. Necesito tus datos para confirmar.</AssistantMsg>
         )}
         {store.step > 3 && (
-          <UserMsg>{store.clientName} · +54 {store.clientPhone}</UserMsg>
+          <UserMsg>{store.clientName} · {tenant.country_code || "+54"} {store.clientPhone}</UserMsg>
         )}
         {store.step === 3 && (
           <StepDetails
@@ -629,6 +635,7 @@ export function BookingFlow({ tenant, services, resources }: {
               notes: store.notes,
             }}
             onContinue={handleDetails}
+            countryCode={tenant.country_code || "+54"}
           />
         )}
 
@@ -642,6 +649,7 @@ export function BookingFlow({ tenant, services, resources }: {
               onEdit={store.goToStep}
               submitting={submitting}
               error={submitError}
+              tenant={tenant}
             />
           </>
         )}

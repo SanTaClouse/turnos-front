@@ -193,7 +193,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
           </div>
           <div className="text-[14px] text-ink-2 mt-[16px] leading-[1.5]">
             Te enviamos la confirmación por WhatsApp al<br />
-            <span className="font-mono text-[13px] text-ink-1">+54 {confirmed.clientPhone}</span>
+            <span className="font-mono text-[13px] text-ink-1">{confirmed.countryCode || "+54"} {confirmed.clientPhone}</span>
           </div>
         </motion.div>
 
@@ -243,6 +243,19 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
             {confirmed.clientName && <DetailLine label="A nombre de" value={confirmed.clientName} />}
             <DetailLine label="Código" value={shortCode} mono />
           </div>
+        </motion.div>
+
+        {/* Aviso screenshot */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.0, duration: 0.4 }}
+          className="mt-[20px] flex items-start gap-[12px] px-[14px] py-[12px] bg-accent/10 border border-accent rounded-[12px]"
+        >
+          <Icon name="camera" size={18} color="var(--accent)" className="flex-shrink-0 mt-[1px]" />
+          <p className="text-[13px] text-ink-2 leading-[1.5]">
+            <strong>Sacá una captura de pantalla</strong> para no perderlo. Te enviamos el detalle por email también.
+          </p>
         </motion.div>
 
         {/* Acciones */}

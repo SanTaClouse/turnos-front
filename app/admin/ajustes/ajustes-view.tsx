@@ -220,6 +220,7 @@ function WhatsappSheet({ tenant, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const [whatsapp, setWhatsapp] = useState(tenant.whatsapp_number);
+  const [countryCode, setCountryCode] = useState(tenant.country_code || "+54");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -229,7 +230,7 @@ function WhatsappSheet({ tenant, onClose, onSaved }: {
     setSaving(true);
     setError(null);
     try {
-      await api.patch(`/tenants/${tenant.id}`, { whatsapp_number: whatsapp });
+      await api.patch(`/tenants/${tenant.id}`, { whatsapp_number: whatsapp, country_code: countryCode });
       onSaved();
     } catch (e) {
       setError(e instanceof Error ? e.message : "No se pudo guardar");
@@ -245,18 +246,29 @@ function WhatsappSheet({ tenant, onClose, onSaved }: {
           El número que ven los clientes en tu landing y donde reciben confirmaciones por WhatsApp.
         </p>
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">Número (con código de país)</label>
+          <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">Código de país</label>
+          <input
+            value={countryCode}
+            onChange={(e) => setCountryCode(e.target.value.replace(/[^\d+]/g, ""))}
+            placeholder="+54"
+            inputMode="tel"
+            className="w-full h-[44px] px-[12px] border border-line bg-surface rounded-sm text-[14px] text-ink-1 font-mono outline-none focus-visible:outline-[2px] focus-visible:outline-accent"
+            style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+          />
+        </div>
+        <div>
+          <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">Número (sin código de país)</label>
           <input
             value={whatsapp}
             onChange={(e) => setWhatsapp(e.target.value)}
-            placeholder="+5491155552200"
+            placeholder="1155552200"
             inputMode="tel"
             className="w-full h-[44px] px-[12px] border border-line bg-surface rounded-sm text-[14px] text-ink-1 font-mono outline-none focus-visible:outline-[2px] focus-visible:outline-accent"
             style={{ fontFamily: "var(--font-jetbrains-mono)" }}
           />
         </div>
         {error && <p className="text-[12px] text-danger">{error}</p>}
-        <Btn onClick={handleSave} loading={saving} disabled={!valid || whatsapp === tenant.whatsapp_number} size="lg" full>
+        <Btn onClick={handleSave} loading={saving} disabled={!valid || (whatsapp === tenant.whatsapp_number && countryCode === (tenant.country_code || "+54"))} size="lg" full>
           Guardar
         </Btn>
       </div>
@@ -445,7 +457,7 @@ export function AjustesView({ initialTenant }: { initialTenant: Tenant }) {
         {/* Footer */}
         <div className="text-center pt-[16px]">
           <div className="font-mono text-[10px] text-ink-3" style={{ letterSpacing: "0.05em" }}>
-            Turnos-sf · v1.0.0
+            Turno1Min · v1.0.0
           </div>
         </div>
       </div>
