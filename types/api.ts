@@ -3,6 +3,7 @@ export interface Tenant {
   name: string;
   slug: string;
   whatsapp_number: string;
+  email?: string | null;
   country_code?: string;
   timezone: string;
   currency: string;
@@ -13,6 +14,30 @@ export interface Tenant {
   cover_url: string | null;
   is_public: boolean;
   created_at: string;
+  /** Solo presente en la respuesta de POST /tenants si se envió email. */
+  session_token?: string;
+}
+
+export interface AdminSession {
+  id: string;
+  device_label: string | null;
+  created_at: string;
+  last_used_at: string | null;
+}
+
+export interface AdminMe {
+  tenant: Pick<
+    Tenant,
+    | "id"
+    | "name"
+    | "slug"
+    | "email"
+    | "whatsapp_number"
+    | "timezone"
+    | "currency"
+    | "locale"
+  >;
+  session: AdminSession;
 }
 
 export interface Service {

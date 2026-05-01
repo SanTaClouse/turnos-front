@@ -22,6 +22,7 @@ interface OnboardingStore {
   businessName: string;
   category: string;
   whatsapp: string;
+  email: string;
   address: string;
 
   // Services
@@ -61,6 +62,7 @@ const initial = {
   businessName: "",
   category: "Barbería / Peluquería",
   whatsapp: "",
+  email: "",
   address: "",
   services: [
     { name: "Corte de pelo", duration_minutes: 30, price: 8000 },

@@ -4,9 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { clearTenantCookie } from "@/app/actions";
+import { logoutAction, revokeSessionAction } from "@/app/actions";
 import { getFrontendDomain } from "@/lib/config";
-import type { Tenant } from "@/types/api";
+import type { Tenant, AdminSession } from "@/types/api";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
 import { BrandMark } from "@/components/ui/brand-mark";
@@ -277,6 +277,107 @@ function WhatsappSheet({ tenant, onClose, onSaved }: {
   );
 }
 
+// ─── Sheet: Dispositivos conectados ────────────────────────
+function formatRelative(dateStr: string | null): string {
+  if (!dateStr) return "—";
+  const diffMs = Date.now() - new Date(dateStr).getTime();
+  const min = Math.floor(diffMs / 60000);
+  if (min < 1) return "ahora";
+  if (min < 60) return `hace ${min} min`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `hace ${hr} h`;
+  const d = Math.floor(hr / 24);
+  if (d < 30) return `hace ${d} día${d > 1 ? "s" : ""}`;
+  const m = Math.floor(d / 30);
+  return `hace ${m} mes${m > 1 ? "es" : ""}`;
+}
+
+function DevicesSheet({
+  sessions,
+  currentSessionId,
+  onClose,
+  onChanged,
+}: {
+  sessions: AdminSession[];
+  currentSessionId: string;
+  onClose: () => void;
+  onChanged: (next: AdminSession[]) => void;
+}) {
+  const [revoking, setRevoking] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleRevoke = async (id: string) => {
+    if (id === currentSessionId) return;
+    if (!confirm("¿Cerrar esta sesión? El otro dispositivo va a tener que volver a entrar con el código.")) return;
+    setRevoking(id);
+    setError(null);
+    try {
+      await revokeSessionAction(id);
+      onChanged(sessions.filter((s) => s.id !== id));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo cerrar la sesión");
+    } finally {
+      setRevoking(null);
+    }
+  };
+
+  return (
+    <BottomSheet open onClose={onClose} title="Dispositivos conectados">
+      <div className="flex flex-col gap-[10px]">
+        <p className="text-[13px] text-ink-2 leading-[1.5]">
+          Estas son las sesiones activas en tu cuenta. Si un dispositivo no es
+          tuyo o ya no lo usás, cerralo desde acá.
+        </p>
+        <div className="bg-surface border border-line rounded overflow-hidden">
+          {sessions.length === 0 ? (
+            <div className="px-[16px] py-[18px] text-[13px] text-ink-3 text-center">
+              No hay sesiones activas.
+            </div>
+          ) : (
+            sessions.map((s, i) => {
+              const isCurrent = s.id === currentSessionId;
+              return (
+                <div key={s.id}>
+                  {i > 0 && <Divider />}
+                  <div className="flex items-center gap-[12px] px-[16px] py-[14px]">
+                    <div className="w-[32px] h-[32px] rounded-[8px] bg-line-2 flex items-center justify-center flex-shrink-0">
+                      <Icon name="phone" size={15} color="var(--ink-2)" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[14px] font-medium" style={{ letterSpacing: "-0.2px" }}>
+                        {s.device_label ?? "Dispositivo desconocido"}
+                        {isCurrent && (
+                          <span className="ml-[8px] text-[10px] font-mono text-accent uppercase">
+                            Este device
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-ink-3 mt-[2px]">
+                        Última actividad: {formatRelative(s.last_used_at)}
+                      </div>
+                    </div>
+                    {!isCurrent && (
+                      <button
+                        onClick={() => handleRevoke(s.id)}
+                        disabled={revoking === s.id}
+                        className="press-fx text-[12px] font-medium text-danger disabled:opacity-50"
+                        style={{ background: "transparent", border: 0, cursor: "pointer" }}
+                      >
+                        {revoking === s.id ? "..." : "Cerrar"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+        {error && <p className="text-[12px] text-danger">{error}</p>}
+      </div>
+    </BottomSheet>
+  );
+}
+
 // ─── Sheet: Próximamente (placeholder genérico) ────────────
 function ComingSoonSheet({ title, description, onClose }: {
   title: string;
@@ -304,11 +405,29 @@ function ComingSoonSheet({ title, description, onClose }: {
 }
 
 // ─── Main view ─────────────────────────────────────────────
-type SheetType = "info" | "url" | "whatsapp" | "hours" | "reminders" | "policy" | "team" | "security" | null;
+type SheetType =
+  | "info"
+  | "url"
+  | "whatsapp"
+  | "hours"
+  | "reminders"
+  | "policy"
+  | "team"
+  | "devices"
+  | null;
 
-export function AjustesView({ initialTenant }: { initialTenant: Tenant }) {
+export function AjustesView({
+  initialTenant,
+  sessions: initialSessions,
+  currentSessionId,
+}: {
+  initialTenant: Tenant;
+  sessions: AdminSession[];
+  currentSessionId: string;
+}) {
   const router = useRouter();
   const [tenant, setTenant] = useState(initialTenant);
+  const [sessions, setSessions] = useState(initialSessions);
   const [openSheet, setOpenSheet] = useState<SheetType>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -438,9 +557,9 @@ export function AjustesView({ initialTenant }: { initialTenant: Tenant }) {
           <Divider />
           <SectionRow
             icon="lock"
-            title="Seguridad"
-            subtitle="Próximamente"
-            onClick={() => setOpenSheet("security")}
+            title="Dispositivos conectados"
+            subtitle={`${sessions.length} ${sessions.length === 1 ? "sesión activa" : "sesiones activas"}`}
+            onClick={() => setOpenSheet("devices")}
           />
           <Divider />
           <SectionRow
@@ -448,8 +567,8 @@ export function AjustesView({ initialTenant }: { initialTenant: Tenant }) {
             title="Cerrar sesión"
             danger
             onClick={async () => {
-              if (confirm("¿Cerrar sesión? Vas a salir del panel y volver a la home.")) {
-                await clearTenantCookie();
+              if (confirm("¿Cerrar sesión? Vas a salir del panel y volver al login.")) {
+                await logoutAction();
               }
             }}
           />
@@ -494,11 +613,12 @@ export function AjustesView({ initialTenant }: { initialTenant: Tenant }) {
           onClose={() => setOpenSheet(null)}
         />
       )}
-      {openSheet === "security" && (
-        <ComingSoonSheet
-          title="Seguridad"
-          description="Configuración de PIN, autenticación de dos factores y sesiones activas. Disponible cuando lancemos auth."
+      {openSheet === "devices" && (
+        <DevicesSheet
+          sessions={sessions}
+          currentSessionId={currentSessionId}
           onClose={() => setOpenSheet(null)}
+          onChanged={setSessions}
         />
       )}
     </>

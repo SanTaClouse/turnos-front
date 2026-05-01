@@ -4,12 +4,10 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 interface AdminStore {
-  tenantId: string;
   selectedDate: string;       // YYYY-MM-DD
   viewMode: "day" | "week";
   resourceFilter: string;     // "all" | resource id
 
-  setTenantId: (id: string) => void;
   setDate: (date: string) => void;
   shiftDate: (days: number) => void;
   setViewMode: (mode: "day" | "week") => void;
@@ -26,15 +24,16 @@ function shiftDateStr(date: string, days: number) {
   return d.toISOString().slice(0, 10);
 }
 
+// Nota: tenantId se removió de este store. La fuente de verdad del tenant
+// es la cookie httpOnly de sesión, leída en server components vía
+// getSession(). Pasar tenantId como prop a los componentes que lo necesiten.
 export const useAdminStore = create<AdminStore>()(
   persist(
     (set) => ({
-      tenantId: process.env.NEXT_PUBLIC_ADMIN_TENANT_ID ?? "",
       selectedDate: todayStr(),
       viewMode: "day",
       resourceFilter: "all",
 
-      setTenantId: (tenantId) => set({ tenantId }),
       setDate: (selectedDate) => set({ selectedDate }),
       shiftDate: (days) => set((s) => ({ selectedDate: shiftDateStr(s.selectedDate, days) })),
       setViewMode: (viewMode) => set({ viewMode }),
@@ -43,7 +42,7 @@ export const useAdminStore = create<AdminStore>()(
     {
       name: "turnosapp-admin",
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ tenantId: s.tenantId, viewMode: s.viewMode }),
+      partialize: (s) => ({ viewMode: s.viewMode }),
     },
   ),
 );

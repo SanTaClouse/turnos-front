@@ -1,6 +1,6 @@
 import { notFound, redirect } from "next/navigation";
 import { api } from "@/lib/api";
-import { getTenantId } from "@/lib/tenant";
+import { getSession } from "@/lib/session";
 import type { Resource, Availability } from "@/types/api";
 import { HorariosView } from "./horarios-view";
 
@@ -11,8 +11,9 @@ interface Props {
 }
 
 export default async function HorariosPage({ params }: Props) {
-  const tenantId = getTenantId();
-  if (!tenantId) redirect("/onboarding");
+  const session = await getSession();
+  if (!session) redirect("/login");
+  const tenantId = session.tenant.id;
 
   const resource = await api
     .get<Resource>(`/resources/${params.id}`)

@@ -542,10 +542,11 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
 }
 
 // ─── Main: AgendaView ──────────────────────────────────────
-export function AgendaView({ resources, services, tenantId }: {
+export function AgendaView({ resources, services, tenantId, tenantName }: {
   resources: Resource[];
   services: Service[];
   tenantId: string;
+  tenantName: string;
 }) {
   const { selectedDate, viewMode, resourceFilter, setDate, shiftDate, setViewMode, setResourceFilter } = useAdminStore();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
@@ -658,7 +659,7 @@ export function AgendaView({ resources, services, tenantId }: {
     <>
       <AdminHeader
         title={formatDateLabel(selectedDate)}
-        subtitle="Agenda"
+        subtitle={tenantName}
         notifCount={counts.pending}
         onEnablePushNotifications={requestPermission}
         isPushEnabled={isSubscribed}

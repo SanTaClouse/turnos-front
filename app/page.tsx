@@ -1,15 +1,14 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { cookies } from "next/headers";
 import { Btn } from "@/components/ui/btn";
-import { TENANT_COOKIE_NAME } from "@/lib/tenant";
+import { getSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
-  // Si ya tiene un negocio creado, ir directo a la agenda
-  const tenantCookie = cookies().get(TENANT_COOKIE_NAME)?.value;
-  if (tenantCookie) redirect("/admin/agenda");
+export default async function HomePage() {
+  // Si ya hay sesión válida, ir directo a la agenda
+  const session = await getSession();
+  if (session) redirect("/admin/agenda");
   return (
     <div
       className="min-h-screen bg-bg flex flex-col items-center justify-center px-[20px]"
@@ -33,7 +32,7 @@ export default function HomePage() {
             Crear mi negocio
           </Btn>
         </Link>
-        <Link href="/admin/agenda" className="w-full">
+        <Link href="/login" className="w-full">
           <Btn variant="secondary" size="lg" full>
             Ya tengo cuenta
           </Btn>

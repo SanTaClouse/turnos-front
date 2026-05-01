@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
-import { setTenantCookie } from "@/app/actions";
+import { setSessionCookie } from "@/app/actions";
 import { getFrontendDomain } from "@/lib/config";
 import { detectLocationConfig } from "@/lib/timezone-utils";
 import { useOnboardingStore, type DraftService, type DraftResource } from "@/store/onboarding";
@@ -82,7 +82,7 @@ function WelcomeStep() {
 
 // 1 — Business
 function BusinessStep() {
-  const { businessName, category, whatsapp, address, set } = useOnboardingStore();
+  const { businessName, category, whatsapp, email, address, set } = useOnboardingStore();
   const inputBase = "w-full h-[48px] px-[14px] border border-line bg-surface rounded-sm text-[15px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent";
 
   return (
@@ -140,6 +140,27 @@ function BusinessStep() {
             className="w-full h-[48px] px-[14px] border border-line bg-surface rounded-sm text-[14px] text-ink-1 font-mono outline-none focus-visible:outline-[2px] focus-visible:outline-accent"
             style={{ fontFamily: "var(--font-jetbrains-mono)" }}
           />
+        </div>
+
+        <div>
+          <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">
+            Tu email
+          </label>
+          <input
+            value={email}
+            onChange={(e) => set("email", e.target.value.trim())}
+            placeholder="dueno@negocio.com"
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoCapitalize="off"
+            spellCheck={false}
+            className={inputBase}
+            style={{ fontFamily: "inherit" }}
+          />
+          <p className="text-[11px] text-ink-3 mt-[6px] leading-[1.4]">
+            Lo vas a usar para entrar a la app desde otros dispositivos.
+          </p>
         </div>
 
         <div>
@@ -576,7 +597,8 @@ export function OnboardingWizard() {
       case "business":
         return (
           store.businessName.trim().length >= 2 &&
-          store.whatsapp.replace(/\D/g, "").length >= 8
+          store.whatsapp.replace(/\D/g, "").length >= 8 &&
+          /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(store.email.trim())
         );
       case "services":
         return (
@@ -605,11 +627,12 @@ export function OnboardingWizard() {
       // Auto-detectar location (timezone, currency, locale) del navegador
       const locationConfig = detectLocationConfig();
 
-      // 1. Tenant
+      // 1. Tenant (con email → backend nos devuelve también un session_token)
       const tenant = await api.post<Tenant>("/tenants", {
         name: store.businessName.trim(),
         slug: store.slug,
         whatsapp_number: store.whatsapp,
+        email: store.email.trim().toLowerCase(),
         address: store.address.trim() || undefined,
         timezone: locationConfig.timezone,
         currency: locationConfig.currency,
@@ -657,8 +680,11 @@ export function OnboardingWizard() {
         }
       }
 
-      // Sesión: setear cookie con el tenantId del nuevo negocio
-      await setTenantCookie(tenant.id);
+      // Sesión: el backend devolvió un session_token al crear el tenant.
+      // Lo guardamos en cookie httpOnly — el dueño queda logueado en este device.
+      if (tenant.session_token) {
+        await setSessionCookie(tenant.session_token);
+      }
 
       store.set("createdTenantId", tenant.id);
       store.next(); // → done
