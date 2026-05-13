@@ -1,20 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { usePWAInstall } from "@/lib/use-pwa-install";
 import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
 
+// Rutas donde el prompt NO debe aparecer:
+//  - /onboarding y /login: en medio del flujo de alta o login
+//  - /admin/*: el admin ya está adentro, no le interesa instalar la landing
+//  - /<slug>/reservar: en medio de una reserva, no queremos interrumpir
+const EXCLUDED_PREFIXES = ["/onboarding", "/login", "/admin"];
+function isExcludedPath(pathname: string | null): boolean {
+  if (!pathname) return false;
+  if (EXCLUDED_PREFIXES.some((p) => pathname.startsWith(p))) return true;
+  if (pathname.includes("/reservar")) return true;
+  return false;
+}
+
 export function PWAInstallPrompt() {
   const [mounted, setMounted] = useState(false);
+  const pathname = usePathname();
   const { canInstall, isInstalled, install, isInstalling } = usePWAInstall();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  if (!mounted || !canInstall || isInstalled) {
+  if (!mounted || !canInstall || isInstalled || isExcludedPath(pathname)) {
     return null;
   }
 

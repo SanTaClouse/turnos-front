@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter_Tight, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
 import { PWAInstallPrompt } from "@/components/ui/pwa-install-prompt";
+import { Providers } from "./providers";
 
 const interTight = Inter_Tight({
   subsets: ["latin"],
@@ -87,8 +88,10 @@ export default function RootLayout({
         <meta name="apple-mobile-web-app-title" content="Turno1Min" />
       </head>
       <body className="bg-bg text-ink-1 antialiased">
-        {children}
-        <PWAInstallPrompt />
+        <Providers>
+          {children}
+          <PWAInstallPrompt />
+        </Providers>
       </body>
     </html>
   );

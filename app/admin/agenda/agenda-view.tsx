@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { motion } from "framer-motion";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { usePushNotifications } from "@/lib/use-push-notifications";
 import type { Appointment, Resource, Service } from "@/types/api";
@@ -549,8 +550,6 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
   tenantName: string;
 }) {
   const { selectedDate, viewMode, resourceFilter, setDate, shiftDate, setViewMode, setResourceFilter } = useAdminStore();
-  const [appointments, setAppointments] = useState<Appointment[]>([]);
-  const [loadingAppts, setLoadingAppts] = useState(false);
   const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [createTime, setCreateTime] = useState<string | null>(null);
@@ -559,6 +558,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
 
   // Push notifications
   const { isSubscribed, requestPermission } = usePushNotifications(tenantId);
+  const qc = useQueryClient();
 
   const today = new Date().toISOString().slice(0, 10);
   const isToday = selectedDate === today;
@@ -566,11 +566,25 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
   // Memoizado: si no, weekDates es nuevo array en cada render → loop infinito
   const weekDates = useMemo(() => getWeekDates(selectedDate), [selectedDate]);
 
-  // Fetch appointments — query depende del modo de vista
-  const loadAppointments = useCallback(async () => {
-    if (!tenantId) return;
-    setLoadingAppts(true);
-    try {
+  // Fetch reactivo con TanStack Query:
+  //  - polling cada 30s para detectar turnos creados desde la web pública
+  //  - refetch automático al volver al tab (refetchOnWindowFocus en QueryClient)
+  //  - invalidación manual después de confirm/cancel/create
+  const apptsQueryKey = useMemo(
+    () => [
+      "appointments",
+      tenantId,
+      viewMode,
+      viewMode === "day" ? selectedDate : `${weekDates[0]}_${weekDates[6]}`,
+      resourceFilter,
+    ] as const,
+    [tenantId, viewMode, selectedDate, weekDates, resourceFilter],
+  );
+
+  const { data: appointments = [], isLoading: loadingAppts } = useQuery({
+    queryKey: apptsQueryKey,
+    enabled: !!tenantId,
+    queryFn: async () => {
       const params = new URLSearchParams({ tenantId });
       if (viewMode === "day") {
         params.set("date", selectedDate);
@@ -581,16 +595,14 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
       if (resourceFilter !== "all") {
         params.set("resourceId", resourceFilter);
       }
-      const data = await api.get<Appointment[]>(`/appointments?${params.toString()}`);
-      setAppointments(data);
-    } catch {
-      setAppointments([]);
-    } finally {
-      setLoadingAppts(false);
-    }
-  }, [tenantId, viewMode, selectedDate, resourceFilter, weekDates]);
+      return api.get<Appointment[]>(`/appointments?${params.toString()}`);
+    },
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  });
 
-  useEffect(() => { loadAppointments(); }, [loadAppointments]);
+  const invalidateAppointments = () =>
+    qc.invalidateQueries({ queryKey: ["appointments", tenantId] });
 
   // En modo día, los appointments ya vienen filtrados por fecha desde el backend
   // En modo semana, necesitamos los del día seleccionado para los stats
@@ -615,7 +627,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
     try {
       await api.patch<Appointment>(`/appointments/${selectedAppt.id}/confirm`, {});
       setActionSuccess("Turno confirmado");
-      await loadAppointments();
+      await invalidateAppointments();
       setSelectedAppt(null);
       setTimeout(() => setActionSuccess(null), 3000);
     } catch {
@@ -632,7 +644,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
     try {
       await api.patch<Appointment>(`/appointments/${selectedAppt.id}/cancel`, {});
       setActionSuccess("Turno cancelado");
-      await loadAppointments();
+      await invalidateAppointments();
       setSelectedAppt(null);
       setTimeout(() => setActionSuccess(null), 3000);
     } catch {
@@ -799,7 +811,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
       {/* Create sheet */}
       <CreateApptSheet
         open={createOpen}
-        onClose={() => { setCreateOpen(false); loadAppointments(); }}
+        onClose={() => { setCreateOpen(false); void invalidateAppointments(); }}
         initialTime={createTime}
         services={services}
         resources={resources}
