@@ -85,7 +85,7 @@ function CalendarMenu({ date, time, endTime, title, onClose }: {
   const [endH, endM] = endTime.split(":").map(Number);
 
   const dtStart = `${y}${String(m).padStart(2, "0")}${String(d).padStart(2, "0")}T${String(startH).padStart(2, "0")}${String(startM).padStart(2, "0")}00`;
-  const dtEnd   = `${y}${String(m).padStart(2, "0")}${String(d).padStart(2, "0")}T${String(endH).padStart(2, "0")}${String(endM).padStart(2, "0")}00`;
+  const dtEnd = `${y}${String(m).padStart(2, "0")}${String(d).padStart(2, "0")}T${String(endH).padStart(2, "0")}${String(endM).padStart(2, "0")}00`;
 
   const googleUrl = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(title)}&dates=${dtStart}/${dtEnd}`;
   const icsContent = [
@@ -192,8 +192,8 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
             ¡Tu turno está reservado!
           </div>
           <div className="text-[14px] text-ink-2 mt-[16px] leading-[1.5]">
-            Te enviamos la confirmación por WhatsApp al<br />
-            <span className="font-mono text-[13px] text-ink-1">{confirmed.countryCode || "+54"} {confirmed.clientPhone}</span>
+            Te enviamos la confirmación al <br />
+            <span className="font-mono text-[13px] text-ink-1">{confirmed.clientEmail}</span>
           </div>
         </motion.div>
 
@@ -214,7 +214,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
               )}
             </div>
             <span className="text-[10px] font-semibold uppercase tracking-[0.3px] bg-accent text-white px-[10px] py-[4px] rounded-full">
-              Confirmado
+              Reservado
             </span>
           </div>
 
@@ -254,7 +254,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
         >
           <Icon name="image" size={18} color="var(--accent)" className="flex-shrink-0 mt-[1px]" />
           <p className="text-[13px] text-ink-2 leading-[1.5]">
-            <strong>Sacá una captura de pantalla</strong> para no perderlo. Te enviamos el detalle por email también.
+            <strong>Sacá una captura de pantalla</strong> para no perderlo. Te enviamos el detalle por email al confirmar el turno.
           </p>
         </motion.div>
 
