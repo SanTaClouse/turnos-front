@@ -112,6 +112,19 @@ export const useBookingStore = create<BookingStore>()(
     {
       name: "turnosapp-booking",
       storage: createJSONStorage(() => sessionStorage),
+      // Persistimos SOLO datos personales (para no hacer re-tipearlos si el
+      // usuario sale y vuelve) y el snapshot del turno confirmado (necesario
+      // para la pantalla /reservar/ok). NO persistimos `step` ni las
+      // elecciones del flujo: cada visita arranca en step 0 con servicios
+      // limpios, evitando "dead ends" cuando el usuario quedó atrapado en
+      // un día sin disponibilidad y aprieta back del navegador.
+      partialize: (s) => ({
+        confirmed: s.confirmed,
+        clientName: s.clientName,
+        clientPhone: s.clientPhone,
+        clientEmail: s.clientEmail,
+        notes: s.notes,
+      }),
     },
   ),
 );

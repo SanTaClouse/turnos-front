@@ -143,15 +143,26 @@ function StepServices({ services, locale, currency, onPick }: {
 }
 
 // ─── Step: Fecha ───────────────────────────────────────────
-function StepDate({ tenantId, serviceId, onPick }: {
+function StepDate({ tenantId, serviceId, availableDaysOfWeek, onPick }: {
   tenantId: string;
   serviceId: string;
+  availableDaysOfWeek: number[];
   onPick: (date: string) => void;
 }) {
   const dates = generateDates(30);
   const [offset, setOffset] = useState(0);
   const todayStr = dates[0];
   const visible = dates.slice(offset * 14, offset * 14 + 14);
+
+  // Set para lookup O(1). Si el tenant no tiene reglas todavía,
+  // tratamos todos los días como válidos (no bloqueamos el flujo).
+  const dowSet = new Set(availableDaysOfWeek);
+  const hasRules = availableDaysOfWeek.length > 0;
+  const isDayAvailable = (dateStr: string) => {
+    if (!hasRules) return true;
+    const [y, m, d] = dateStr.split("-").map(Number);
+    return dowSet.has(new Date(y, m - 1, d).getDay());
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 30, delay: 0.3 }}
@@ -161,13 +172,20 @@ function StepDate({ tenantId, serviceId, onPick }: {
           const { dow, day } = formatDateShort(dateStr);
           const isToday = dateStr === todayStr;
           const isPast = dateStr < todayStr;
+          const available = isDayAvailable(dateStr);
+          const disabled = isPast || !available;
           return (
             <button
               key={dateStr}
-              onClick={() => !isPast && onPick(dateStr)}
-              disabled={isPast}
+              onClick={() => !disabled && onPick(dateStr)}
+              disabled={disabled}
+              title={!available && !isPast ? "Sin atención este día" : undefined}
               className="press-fx flex-shrink-0 flex flex-col items-center gap-1 py-[10px] bg-surface border border-line rounded-[12px] w-[58px]"
-              style={{ fontFamily: "inherit", opacity: isPast ? 0.35 : 1 }}
+              style={{
+                fontFamily: "inherit",
+                opacity: isPast ? 0.35 : !available ? 0.4 : 1,
+                cursor: disabled ? "not-allowed" : "pointer",
+              }}
             >
               <span className="font-mono text-[10px] text-ink-3 uppercase tracking-[0.05em]">{dow}</span>
               <span className="text-[20px] font-medium text-ink-1" style={{ letterSpacing: "-0.5px" }}>{day}</span>
@@ -198,12 +216,13 @@ function StepDate({ tenantId, serviceId, onPick }: {
 }
 
 // ─── Step: Hora ────────────────────────────────────────────
-function StepTime({ tenantId, serviceId, date, resources, onPick }: {
+function StepTime({ tenantId, serviceId, date, resources, onPick, onChangeDate }: {
   tenantId: string;
   serviceId: string;
   date: string;
   resources: Resource[];
   onPick: (time: string, resourceId: string, resourceName: string) => void;
+  onChangeDate: () => void;
 }) {
   const [slots, setSlots] = useState<AvailableSlot[] | null>(null);
 
@@ -219,8 +238,14 @@ function StepTime({ tenantId, serviceId, date, resources, onPick }: {
   if (slots === null) return <TimeSkeleton />;
   if (slots.length === 0) return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 30 }}
-      className="mt-[14px] text-center px-[20px] py-[28px] bg-surface border border-dashed border-line rounded text-ink-2 text-[14px]">
-      No hay turnos disponibles este día. Probá con otra fecha.
+      className="mt-[14px]">
+      <div className="text-center px-[20px] py-[24px] bg-surface border border-dashed border-line rounded text-ink-2 text-[14px]">
+        No hay turnos disponibles este día.
+      </div>
+      <Btn onClick={onChangeDate} variant="primary" size="lg" full className="mt-[12px] gap-2">
+        <Icon name="back" size={16} color="var(--bg)" />
+        Elegir otro día
+      </Btn>
     </motion.div>
   );
 
@@ -236,6 +261,17 @@ function StepTime({ tenantId, serviceId, date, resources, onPick }: {
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 30, delay: 0.2 }}
       className="mt-[14px] flex flex-col gap-[14px]">
+      {/* Mini-CTA siempre visible: el usuario puede cambiar de día aunque
+          haya slots, sin tener que apretar back del header */}
+      <button
+        onClick={onChangeDate}
+        className="self-start inline-flex items-center gap-[6px] text-[12px] text-ink-2 underline underline-offset-4"
+        style={{ background: "transparent", border: 0, cursor: "pointer", padding: 0 }}
+        type="button"
+      >
+        <Icon name="back" size={12} color="var(--ink-2)" />
+        Cambiar día
+      </button>
       {Object.entries(groups).map(([key, arr]) =>
         arr.length === 0 ? null : (
           <div key={key}>
@@ -457,10 +493,11 @@ function SummaryRow({ icon, label, value, meta, onEdit, isLast }: {
 }
 
 // ─── Main: BookingFlow ─────────────────────────────────────
-export function BookingFlow({ tenant, services, resources }: {
+export function BookingFlow({ tenant, services, resources, availableDaysOfWeek }: {
   tenant: Tenant;
   services: Service[];
   resources: Resource[];
+  availableDaysOfWeek: number[];
 }) {
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -612,6 +649,7 @@ export function BookingFlow({ tenant, services, resources }: {
           <StepDate
             tenantId={tenant.id}
             serviceId={store.serviceId!}
+            availableDaysOfWeek={availableDaysOfWeek}
             onPick={handleDate}
           />
         )}
@@ -630,6 +668,7 @@ export function BookingFlow({ tenant, services, resources }: {
             date={store.date}
             resources={resources}
             onPick={handleTime}
+            onChangeDate={() => store.goToStep(1)}
           />
         )}
 
