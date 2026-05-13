@@ -1,59 +1,74 @@
-const CACHE_NAME = "turno1min-v2";
-const urlsToCache = [
-  "/",
-  "/manifest.json",
-];
+// SW v3:
+//  - Cachea SOLO assets estáticos same-origin (iconos, fuentes, _next/static/).
+//  - NO toca peticiones a la API (cross-origin) ni documentos HTML — esas
+//    van directo a la red. Esto evita el bug del v2 que servía respuestas
+//    rancias de /appointments y rompía el polling de la agenda.
+//  - Mantiene los handlers de push / notificationclick para que el admin
+//    reciba notificaciones cuando se crea un turno.
+
+const CACHE_NAME = "turno1min-v3";
+const PRECACHE_URLS = ["/manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(urlsToCache);
-    })
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)),
   );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName);
-          }
-        })
-      );
-    })
+    caches.keys().then((cacheNames) =>
+      Promise.all(
+        cacheNames.map((name) => {
+          if (name !== CACHE_NAME) return caches.delete(name);
+        }),
+      ),
+    ),
   );
   self.clients.claim();
 });
 
+// Decide si una petición es un asset estático seguro de cachear.
+function isStaticAsset(url) {
+  if (url.origin !== self.location.origin) return false;
+  if (url.pathname.startsWith("/_next/static/")) return true;
+  if (url.pathname === "/manifest.json") return true;
+  return /\.(?:png|jpe?g|gif|svg|webp|ico|woff2?|ttf|otf|eot)$/i.test(
+    url.pathname,
+  );
+}
+
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") {
+  // Solo GETs — POST/PATCH/DELETE NUNCA se cachean.
+  if (event.request.method !== "GET") return;
+
+  let url;
+  try {
+    url = new URL(event.request.url);
+  } catch {
     return;
   }
 
+  // API cross-origin, documentos HTML, navegaciones, Next data:
+  // todo pasa derecho a la red. NO llamamos a respondWith, así el
+  // browser maneja la petición como si el SW no existiera.
+  if (!isStaticAsset(url)) return;
+
+  // Stale-while-revalidate para assets estáticos.
   event.respondWith(
-    caches.match(event.request).then((response) => {
-      if (response) {
-        return response;
-      }
-
-      return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || response.type === "error") {
+    caches.match(event.request).then((cached) => {
+      const networkFetch = fetch(event.request)
+        .then((response) => {
+          if (response && response.status === 200 && response.type !== "error") {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
           return response;
-        }
-
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
-
-        return response;
-      });
-    }).catch(() => {
-      return caches.match("/");
-    })
+        })
+        .catch(() => cached);
+      return cached || networkFetch;
+    }),
   );
 });
 
@@ -98,6 +113,6 @@ self.addEventListener("notificationclick", (event) => {
         if (self.clients.openWindow) {
           return self.clients.openWindow(targetUrl);
         }
-      })
+      }),
   );
 });
