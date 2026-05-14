@@ -77,13 +77,23 @@ export function usePushNotifications(tenantId: string | null) {
 
 async function savePushSubscription(tenantId: string, subscription: PushSubscription) {
   try {
+    // IMPORTANTE: usar toJSON(), NO getKey().
+    // getKey() devuelve ArrayBuffer y JSON.stringify lo serializa como {}
+    // — el backend termina guardando keys vacías y web-push falla en silencio.
+    // toJSON() devuelve { endpoint, keys: { p256dh, auth } } como base64url
+    // strings, que es exactamente lo que necesita web-push.
+    const json = subscription.toJSON();
+    if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
+      console.error("Push subscription missing endpoint or keys", json);
+      return;
+    }
     await api.post("/notifications/subscribe", {
       tenant_id: tenantId,
       subscription: {
-        endpoint: subscription.endpoint,
+        endpoint: json.endpoint,
         keys: {
-          p256dh: subscription.getKey("p256dh"),
-          auth: subscription.getKey("auth"),
+          p256dh: json.keys.p256dh,
+          auth: json.keys.auth,
         },
       },
     });

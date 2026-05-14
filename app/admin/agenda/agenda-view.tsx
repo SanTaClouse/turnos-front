@@ -289,10 +289,20 @@ function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNote
   resources: Resource[];
   onClose: () => void;
   onConfirm: () => void;
-  onCancel: () => void;
+  onCancel: (alsoBlockSlot: boolean) => void;
   onNotesChange: (notes: string) => void;
   loading?: boolean;
 }) {
+  // sub-estado interno: cuando el admin aprieta "Cancelar turno" mostramos
+  // un panel intermedio que pregunta si además bloqueamos el horario.
+  // Esto evita el doble efecto de "cliente cancela y otro reserva en su lugar".
+  const [cancelStage, setCancelStage] = useState<"normal" | "choose">("normal");
+
+  // Resetear el sub-estado cuando se cierra el sheet o cambia el turno
+  useEffect(() => {
+    if (!appt) setCancelStage("normal");
+  }, [appt]);
+
   const resource = resources.find((r) => r.id === appt?.resource_id);
   const endTime = appt?.time && appt.service?.duration_minutes
     ? addMinutes(appt.time, appt.service.duration_minutes)
@@ -309,9 +319,82 @@ function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNote
     ? `https://wa.me/${appt.client.phone.replace(/\D/g, "")}`
     : "#";
 
+  const handleCloseSheet = () => {
+    setCancelStage("normal");
+    onClose();
+  };
+
   return (
-    <BottomSheet open={!!appt} onClose={onClose} title="Detalle del turno">
-      {appt && (
+    <BottomSheet open={!!appt} onClose={handleCloseSheet} title={cancelStage === "choose" ? "Cancelar turno" : "Detalle del turno"}>
+      {appt && cancelStage === "choose" && (
+        <div className="flex flex-col gap-[12px]">
+          <p className="text-[14px] text-ink-2 leading-[1.5]">
+            Vas a cancelar el turno de <strong className="text-ink-1">{appt.client?.name ?? "el cliente"}</strong>{" "}
+            de las <span className="font-mono">{appt.time}</span>.
+          </p>
+          <p className="text-[13px] text-ink-3 leading-[1.4]">
+            ¿Querés también <strong className="text-ink-2">bloquear ese horario</strong> para que nadie más pueda reservarlo?
+          </p>
+
+          <button
+            onClick={() => onCancel(true)}
+            disabled={loading}
+            className="press-fx flex flex-col items-start gap-[4px] px-[16px] py-[14px] rounded text-left w-full mt-[8px] disabled:opacity-50"
+            style={{
+              background: "var(--ink-1)",
+              color: "var(--bg)",
+              border: "1px solid var(--ink-1)",
+              fontFamily: "inherit",
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+            type="button"
+          >
+            <span className="text-[14px] font-semibold inline-flex items-center gap-[8px]">
+              <Icon name="shield" size={14} color="var(--bg)" />
+              Cancelar y bloquear el horario
+            </span>
+            <span className="text-[12px]" style={{ opacity: 0.7 }}>
+              Recomendado si el cliente avisó que no podía. El slot queda cerrado a nuevas reservas.
+            </span>
+          </button>
+
+          <button
+            onClick={() => onCancel(false)}
+            disabled={loading}
+            className="press-fx flex flex-col items-start gap-[4px] px-[16px] py-[14px] rounded text-left w-full disabled:opacity-50"
+            style={{
+              background: "var(--surface)",
+              color: "var(--ink-1)",
+              border: "1px solid var(--line)",
+              fontFamily: "inherit",
+              cursor: loading ? "not-allowed" : "pointer",
+            }}
+            type="button"
+          >
+            <span className="text-[14px] font-semibold">
+              Solo cancelar (dejar disponible)
+            </span>
+            <span className="text-[12px] text-ink-3">
+              El horario vuelve a aparecer libre. Útil si fue un error o si querés re-asignar.
+            </span>
+          </button>
+
+          <button
+            onClick={() => setCancelStage("normal")}
+            disabled={loading}
+            className="press-fx text-[13px] text-ink-2 underline underline-offset-4 self-center mt-[6px] disabled:opacity-50"
+            style={{ background: "transparent", border: 0, cursor: loading ? "not-allowed" : "pointer", padding: "8px 0" }}
+            type="button"
+          >
+            Volver atrás
+          </button>
+
+          {loading && (
+            <p className="text-[12px] text-ink-3 text-center mt-[4px]">Procesando…</p>
+          )}
+        </div>
+      )}
+      {appt && cancelStage === "normal" && (
         <div>
           {/* Status + source + code */}
           <div className="flex items-center gap-[10px] mb-[16px] flex-wrap">
@@ -401,8 +484,8 @@ function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNote
               </Btn>
             )}
             {appt.status !== "cancelled" && (
-              <Btn variant="secondary" size="lg" full onClick={onCancel} loading={loading} disabled={loading} className="text-danger">
-                {!loading ? "Cancelar turno" : "Cancelando..."}
+              <Btn variant="secondary" size="lg" full onClick={() => setCancelStage("choose")} disabled={loading} className="text-danger">
+                Cancelar turno
               </Btn>
             )}
           </div>
@@ -638,12 +721,30 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
     }
   };
 
-  const handleCancel = async () => {
+  const handleCancel = async (alsoBlockSlot: boolean) => {
     if (!selectedAppt) return;
     setActionLoading(true);
     try {
       await api.patch<Appointment>(`/appointments/${selectedAppt.id}/cancel`, {});
-      setActionSuccess("Turno cancelado");
+
+      if (alsoBlockSlot) {
+        // Bloquear el horario para que nadie más pueda reservarlo.
+        // Best-effort: si falla, no rompe la cancelación que ya pasó.
+        try {
+          await api.post("/blocked-slots", {
+            tenant_id: selectedAppt.tenant_id,
+            resource_id: selectedAppt.resource_id,
+            date: selectedAppt.date,
+            start_time: selectedAppt.time,
+            end_time: selectedAppt.end_time,
+            reason: `Cancelación: ${selectedAppt.client?.name ?? "Cliente"}`,
+          });
+        } catch (e) {
+          console.error("No se pudo bloquear el slot:", e);
+        }
+      }
+
+      setActionSuccess(alsoBlockSlot ? "Turno cancelado y horario bloqueado" : "Turno cancelado");
       await invalidateAppointments();
       setSelectedAppt(null);
       setTimeout(() => setActionSuccess(null), 3000);
@@ -673,6 +774,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
         title={formatDateLabel(selectedDate)}
         subtitle={tenantName}
         notifCount={counts.pending}
+        tenantId={tenantId}
         onEnablePushNotifications={requestPermission}
         isPushEnabled={isSubscribed}
       />

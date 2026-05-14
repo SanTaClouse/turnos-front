@@ -192,7 +192,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
             ¡Tu turno está reservado!
           </div>
           <div className="text-[14px] text-ink-2 mt-[16px] leading-[1.5]">
-            Te enviamos la confirmación al <br />
+            Te enviaremos la confirmación al <br />
             <span className="font-mono text-[13px] text-ink-1">{confirmed.clientEmail}</span>
           </div>
         </motion.div>
@@ -254,7 +254,7 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
         >
           <Icon name="image" size={18} color="var(--accent)" className="flex-shrink-0 mt-[1px]" />
           <p className="text-[13px] text-ink-2 leading-[1.5]">
-            <strong>Sacá una captura de pantalla</strong> para no perderlo. Te enviamos el detalle por email al confirmar el turno.
+            <strong>Sacá una captura de pantalla</strong> para no perderlo. Te enviaremos el detalle por email al confirmar el turno.
           </p>
         </motion.div>
 
