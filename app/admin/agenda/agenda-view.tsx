@@ -66,6 +66,75 @@ function timeToMins(time: string) {
   return h * 60 + m;
 }
 
+/**
+ * Asigna a cada turno una columna dentro de su "cluster" de solapamiento.
+ *
+ * Algoritmo clásico tipo Google Calendar:
+ *   1) ordenar por hora de inicio
+ *   2) agrupar en clusters mientras haya overlap transitivo
+ *   3) dentro de cada cluster, asignar a cada turno la columna más a la izquierda
+ *      donde no se pisa con otro de la misma columna
+ *
+ * Resultado: en vista "todos", dos profesionales con turnos al mismo tiempo
+ * aparecen lado a lado (cada uno ocupando 1/N del ancho), sin taparse.
+ */
+type ApptLayout = { col: number; totalCols: number };
+
+function computeOverlapLayout(appts: Appointment[]): Map<string, ApptLayout> {
+  type Item = { id: string; startMin: number; endMin: number };
+  const items: Item[] = appts.map((a) => {
+    const start = timeToMins(a.time);
+    const duration = a.service?.duration_minutes ?? 30;
+    return { id: a.id, startMin: start, endMin: start + duration };
+  });
+  // Ordenar por inicio (y por fin como desempate, mejora la agrupación)
+  items.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+
+  // 1) Partir en clusters: items que se tocan transitivamente
+  const clusters: Item[][] = [];
+  let current: Item[] = [];
+  let currentEnd = -Infinity;
+  for (const item of items) {
+    if (item.startMin >= currentEnd && current.length > 0) {
+      clusters.push(current);
+      current = [];
+      currentEnd = -Infinity;
+    }
+    current.push(item);
+    currentEnd = Math.max(currentEnd, item.endMin);
+  }
+  if (current.length) clusters.push(current);
+
+  // 2) Asignar columna a cada item dentro del cluster
+  const out = new Map<string, ApptLayout>();
+  for (const cluster of clusters) {
+    const cols: Item[][] = []; // cada col guarda los items ya colocados
+    for (const item of cluster) {
+      let placed = false;
+      for (let c = 0; c < cols.length; c++) {
+        const last = cols[c][cols[c].length - 1];
+        if (last.endMin <= item.startMin) {
+          cols[c].push(item);
+          out.set(item.id, { col: c, totalCols: 0 }); // totalCols se setea abajo
+          placed = true;
+          break;
+        }
+      }
+      if (!placed) {
+        cols.push([item]);
+        out.set(item.id, { col: cols.length - 1, totalCols: 0 });
+      }
+    }
+    const totalCols = cols.length;
+    for (const colItems of cols) {
+      for (const item of colItems) {
+        out.set(item.id, { col: out.get(item.id)!.col, totalCols });
+      }
+    }
+  }
+  return out;
+}
+
 function DayView({ appointments, resources, onOpen, onCreateAt }: {
   appointments: Appointment[];
   resources: Resource[];
@@ -75,6 +144,10 @@ function DayView({ appointments, resources, onOpen, onCreateAt }: {
   const containerRef = useRef<HTMLDivElement>(null);
   const firstApptRef = useRef<HTMLButtonElement>(null);
   const totalHeight = TOTAL_MINS * PX_PER_MIN;
+
+  // Calcular layout de columnas para turnos solapados.
+  // Recalcula solo cuando cambia el set de turnos — barato porque es O(n log n).
+  const layoutById = useMemo(() => computeOverlapLayout(appointments), [appointments]);
 
   // Scroll al primer turno cuando cambian los appointments
   useEffect(() => {
@@ -160,43 +233,77 @@ function DayView({ appointments, resources, onOpen, onCreateAt }: {
           // Marcar el primer turno para scroll
           const isFirst = idx === 0;
 
+          // Layout horizontal: si hay overlap, dividimos el ancho entre N columnas.
+          // Sin overlap (totalCols=1), el bloque ocupa todo el ancho como antes.
+          const layout = layoutById.get(appt.id) ?? { col: 0, totalCols: 1 };
+          const colWidthPct = 100 / layout.totalCols;
+          const gapPx = layout.totalCols > 1 ? 3 : 0; // separación entre columnas
+          const isNarrow = layout.totalCols > 1;
+          const hue = (resource as Resource & { hue?: number })?.hue ?? 24;
+          // Banda lateral con el color del recurso — refuerzo visual cuando hay
+          // varias columnas, así se distingue de quién es el turno de un vistazo.
+          const resourceAccent = resource ? `oklch(0.62 0.13 ${hue})` : "var(--line)";
+
           return (
             <button
               ref={isFirst ? firstApptRef : null}
               key={appt.id}
               onClick={() => onOpen(appt)}
-              className="press-fx absolute left-0 right-0 bg-surface rounded-[8px] px-[10px] py-[6px] flex items-start gap-[8px] text-left overflow-hidden"
+              className="press-fx absolute bg-surface rounded-[8px] py-[6px] flex items-start gap-[6px] text-left overflow-hidden"
               style={{
                 top: startMins * PX_PER_MIN,
                 height,
+                left: `calc(${layout.col * colWidthPct}% + ${gapPx / 2}px)`,
+                width: `calc(${colWidthPct}% - ${gapPx}px)`,
+                paddingLeft: 8,
+                paddingRight: isNarrow ? 6 : 10,
                 border: "1px solid var(--line)",
                 borderLeft: `3px solid ${statusBorder}`,
+                // Sombra muy sutil del color del recurso a la izquierda — sirve
+                // como "tab" de identidad sin gastar más ancho horizontal.
+                boxShadow: `inset 6px 0 0 -3px ${resourceAccent}`,
                 fontFamily: "inherit",
                 zIndex: 10,
               }}
+              title={resource ? `${appt.client?.name ?? "Cliente"} · ${resource.name}` : appt.client?.name ?? "Cliente"}
             >
-              {resource && (
+              {resource && !isNarrow && (
                 <ResourceAvatar
                   initials={resource.name.slice(0, 2).toUpperCase()}
-                  hue={(resource as Resource & { hue?: number }).hue ?? 24}
+                  hue={hue}
                   size={height > 50 ? 28 : 20}
                 />
               )}
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-[4px]">
+                <div className="flex items-center gap-[4px] flex-wrap">
                   <span className="font-mono text-[11px] font-semibold text-ink-1">{appt.time}</span>
-                  <span className="text-[10px] text-ink-3">· {duration}min</span>
+                  {!isNarrow && (
+                    <span className="text-[10px] text-ink-3">· {duration}min</span>
+                  )}
+                  {isNarrow && resource && (
+                    // En modo angosto reemplazamos el avatar grande por un chip mini
+                    // del profesional, así sigue identificándose sin ocupar espacio.
+                    <span
+                      className="text-[9px] font-semibold uppercase tracking-[0.04em] px-[5px] py-[1px] rounded-[4px]"
+                      style={{
+                        background: `oklch(0.92 0.04 ${hue})`,
+                        color: `oklch(0.32 0.10 ${hue})`,
+                      }}
+                    >
+                      {resource.name.split(" ")[0]}
+                    </span>
+                  )}
                 </div>
                 {height > 44 && (
                   <div className="text-[12px] font-medium text-ink-1 truncate mt-[1px]">
                     {appt.client?.name ?? "Cliente"}
                   </div>
                 )}
-                {height > 62 && (
+                {height > 62 && !isNarrow && (
                   <div className="text-[10px] text-ink-3 truncate">{appt.service?.name}</div>
                 )}
               </div>
-              {height > 50 && (
+              {height > 50 && !isNarrow && (
                 <StatusPill status={appt.status as "pending" | "confirmed" | "cancelled"} />
               )}
             </button>
