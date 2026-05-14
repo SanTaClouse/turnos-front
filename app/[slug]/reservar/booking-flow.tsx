@@ -562,13 +562,16 @@ export function BookingFlow({ tenant, services, resources, availableDaysOfWeek }
     setSubmitError(null);
     try {
       const countryCode = selectedCountry || tenant.country_code || "+54";
+      // Mandamos el teléfono crudo (con prefijo de país elegido). El backend
+      // normaliza a E.164 antes de dedup contra `client.phone`. Acepta cualquier
+      // formato: con/sin "9", con/sin "0" troncal, con o sin espacios/guiones.
       const appt = await api.post<{ id: string }>("/appointments", {
         tenant_id: tenant.id,
         service_id: store.serviceId,
         resource_id: store.resourceId,
         date: store.date,
         time: store.time,
-        client_phone: `${countryCode}${store.clientPhone.replace(/\D/g, "")}`,
+        client_phone: `${countryCode} ${store.clientPhone}`,
         client_name: store.clientName,
         client_email: store.clientEmail.trim() || undefined,
         notes: store.notes || undefined,

@@ -5,7 +5,7 @@ import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { usePushNotifications } from "@/lib/use-push-notifications";
-import type { Appointment, Resource, Service } from "@/types/api";
+import type { Appointment, AvailableSlot, Resource, Service } from "@/types/api";
 import { useAdminStore } from "@/store/admin";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
@@ -613,28 +613,68 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
 }) {
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [selectedResource, setSelectedResource] = useState<string>("");
+  // Si el sheet se abrió clickeando un horario, `initialTime` lo define.
+  // Si se abrió desde el FAB, arranca null y el admin lo elige acá.
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
   const { selectedDate } = useAdminStore();
 
   useEffect(() => {
-    if (!open) { setSelectedService(null); setPhone(""); setName(""); setSelectedResource(""); }
-  }, [open]);
+    if (!open) {
+      setSelectedService(null);
+      setPhone("");
+      setName("");
+      setSelectedResource("");
+      setSelectedTime(null);
+    } else {
+      // Cada vez que abrimos, arrancamos con la hora elegida (si vino) y el
+      // resto en limpio.
+      setSelectedTime(initialTime);
+    }
+  }, [open, initialTime]);
 
-  const canSubmit = !!selectedService && phone.replace(/\D/g, "").length >= 8;
+  // Cargamos los slots disponibles cuando hay servicio elegido. Solo se usa
+  // cuando el admin abrió el sheet desde el FAB (initialTime === null), pero
+  // dejamos siempre habilitada la query para que pueda *cambiar* la hora
+  // incluso si entró por un slot específico.
+  const { data: slots = [], isLoading: loadingSlots } = useQuery({
+    queryKey: ["available-slots", tenantId, selectedService?.id, selectedDate],
+    queryFn: () =>
+      api.get<AvailableSlot[]>(
+        `/availability/slots?tenantId=${tenantId}&serviceId=${selectedService!.id}&date=${selectedDate}`,
+      ),
+    enabled: open && !!selectedService,
+  });
+
+  // Si el slot que estaba elegido ya no aparece (cambió el servicio o el día),
+  // lo limpiamos para que el admin re-elija — evita enviar un time inválido.
+  useEffect(() => {
+    if (!selectedTime || !selectedService) return;
+    if (loadingSlots) return;
+    const stillAvailable = slots.some((s) => s.slot === selectedTime);
+    if (!stillAvailable) setSelectedTime(null);
+  }, [slots, selectedService, selectedTime, loadingSlots]);
+
+  const canSubmit =
+    !!selectedService && !!selectedTime && phone.replace(/\D/g, "").length >= 8;
 
   const handleCreate = async () => {
-    if (!canSubmit || !initialTime) return;
+    if (!canSubmit) return;
     setLoading(true);
     try {
+      // Mandamos el teléfono tal cual lo tipeó el admin. El backend lo
+      // normaliza a E.164 (+54 9 ...) y dedupea contra clientes existentes,
+      // así si el cliente ya tiene email cargado, lo reutiliza para mandarle
+      // confirmación.
       await api.post("/appointments", {
         tenant_id: tenantId,
         service_id: selectedService!.id,
         resource_id: selectedResource || undefined,
         date: selectedDate,
-        time: initialTime,
-        client_phone: `+54${phone.replace(/\D/g, "")}`,
+        time: selectedTime!,
+        client_phone: phone,
         client_name: name || "Cliente",
         source: "manual",
       });
@@ -649,12 +689,12 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
   return (
     <BottomSheet open={open} onClose={onClose} title="Nuevo turno">
       <div className="flex flex-col gap-[12px]">
-        {/* Fecha y hora */}
+        {/* Fecha */}
         <div className="bg-surface border border-line rounded px-[14px] py-[12px] flex items-center gap-[14px]">
           <div className="flex-1">
-            <div className="label-mono">Fecha y hora</div>
+            <div className="label-mono">Fecha</div>
             <div className="text-[14px] font-medium mt-[2px]">
-              {formatDate(selectedDate)} · <span className="font-mono">{initialTime ?? "—"}</span>
+              {formatDate(selectedDate)}
             </div>
           </div>
         </div>
@@ -682,6 +722,59 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
           </div>
         </div>
 
+        {/* Horario */}
+        <div>
+          <div className="flex justify-between items-baseline mb-[6px]">
+            <label className="text-[12px] font-medium text-ink-2">Horario</label>
+            {selectedTime && (
+              <span className="font-mono text-[11px] text-ink-3">
+                {selectedTime}
+              </span>
+            )}
+          </div>
+          {!selectedService && (
+            <div className="text-[12px] text-ink-3 bg-surface border border-line rounded-sm px-[12px] py-[10px]">
+              Elegí un servicio para ver los horarios disponibles.
+            </div>
+          )}
+          {selectedService && loadingSlots && (
+            <div className="flex gap-[6px]">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-[36px] w-[64px] rounded-[8px] bg-line-2 animate-pulse" />
+              ))}
+            </div>
+          )}
+          {selectedService && !loadingSlots && slots.length === 0 && (
+            <div className="text-[12px] text-ink-3 bg-surface border border-line rounded-sm px-[12px] py-[10px]">
+              No hay horarios disponibles para este servicio el {formatDate(selectedDate)}.
+            </div>
+          )}
+          {selectedService && !loadingSlots && slots.length > 0 && (
+            <div className="flex flex-wrap gap-[6px] max-h-[160px] overflow-y-auto hide-scroll">
+              {slots.map((s) => {
+                const active = s.slot === selectedTime;
+                return (
+                  <button
+                    key={s.slot}
+                    onClick={() => setSelectedTime(s.slot)}
+                    className="press-fx font-mono text-[13px] font-medium px-[10px] py-[6px] rounded-[8px]"
+                    style={{
+                      background: active ? "var(--ink-1)" : "var(--surface)",
+                      color: active ? "var(--bg)" : "var(--ink-1)",
+                      border: `1px solid ${active ? "var(--ink-1)" : "var(--line)"}`,
+                      fontFamily: "inherit",
+                      cursor: "pointer",
+                    }}
+                    type="button"
+                  >
+                    {s.slot}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
         {/* Recurso */}
         <div>
           <label className="text-[12px] font-medium text-ink-2 block mb-[6px]">Profesional</label>
@@ -702,11 +795,15 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
           <input
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            placeholder="11 5555 2200"
+            placeholder="Ej: +54 9 11 5555 2200 / 11 5555 2200"
             inputMode="tel"
             className="w-full h-[44px] px-[12px] border border-line bg-surface rounded-sm text-[14px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent"
             style={{ fontFamily: "inherit" }}
           />
+          <p className="text-[10.5px] text-ink-3 mt-[4px] leading-[1.3]">
+            Aceptamos cualquier formato (con o sin código de país, con o sin espacios).
+            Si el cliente ya existe con email cargado, le llega el mail automáticamente.
+          </p>
         </div>
 
         {/* Nombre */}
