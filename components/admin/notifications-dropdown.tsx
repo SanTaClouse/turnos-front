@@ -1,20 +1,24 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { api } from "@/lib/api";
+import type { UseMutationResult } from "@tanstack/react-query";
 import type { Appointment } from "@/types/api";
 import { Icon } from "@/components/ui/icon";
 import { StatusPill, SourcePill } from "@/components/ui/status-pill";
+import { isAppointmentPast } from "@/lib/use-notifications-feed";
 
 interface NotificationsDropdownProps {
   open: boolean;
   onClose: () => void;
-  tenantId: string;
   isPushEnabled: boolean;
   onEnablePush: () => void;
   anchorRef: React.RefObject<HTMLButtonElement | null>;
+  recent: Appointment[];
+  isLoading: boolean;
+  isError: boolean;
+  refetch: () => void;
+  confirmMutation: UseMutationResult<Appointment, Error, string>;
 }
 
 /**
@@ -23,18 +27,24 @@ interface NotificationsDropdownProps {
  * Es el fallback principal cuando el push del browser no llega (caso típico
  * en desktop con Focus Assist / permisos / SW dormido). El admin abre el
  * dropdown y ve los últimos turnos creados, con botón para confirmar inline
- * los que estén pendientes.
+ * los que estén pendientes y todavía no hayan vencido.
+ *
+ * El fetch del feed y la mutation de confirmación viven en el hook
+ * `useNotificationsFeed` (en el header) — este componente es presentacional.
  */
 export function NotificationsDropdown({
   open,
   onClose,
-  tenantId,
   isPushEnabled,
   onEnablePush,
   anchorRef,
+  recent,
+  isLoading,
+  isError,
+  refetch,
+  confirmMutation,
 }: NotificationsDropdownProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const qc = useQueryClient();
 
   // Cerrar con Esc o click afuera
   useEffect(() => {
@@ -55,30 +65,6 @@ export function NotificationsDropdown({
       window.removeEventListener("mousedown", onClick);
     };
   }, [open, onClose, anchorRef]);
-
-  const { data: recent = [], isLoading, isError, refetch } = useQuery({
-    queryKey: ["appointments-recent", tenantId],
-    queryFn: () =>
-      api.get<Appointment[]>(
-        `/appointments/recent?tenantId=${tenantId}&limit=20`,
-      ),
-    enabled: open && !!tenantId,
-    // El dropdown se abre on-demand, así que refrescamos cada vez que se
-    // abre y mantenemos un polling corto mientras esté abierto.
-    refetchOnMount: "always",
-    refetchInterval: open ? 15_000 : false,
-    staleTime: 5_000,
-  });
-
-  const confirmMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.patch<Appointment>(`/appointments/${id}/confirm`, {}),
-    onSuccess: () => {
-      // Invalidar tanto el feed del dropdown como las queries de la agenda.
-      void qc.invalidateQueries({ queryKey: ["appointments-recent", tenantId] });
-      void qc.invalidateQueries({ queryKey: ["appointments", tenantId] });
-    },
-  });
 
   return (
     <AnimatePresence>
@@ -118,7 +104,7 @@ export function NotificationsDropdown({
                 Notificaciones
               </span>
               <button
-                onClick={() => void refetch()}
+                onClick={() => refetch()}
                 className="press-fx text-[11px] font-mono uppercase tracking-[0.08em] text-ink-3 hover:text-ink-1"
                 style={{ background: "transparent", border: 0, cursor: "pointer", padding: "4px 6px" }}
                 title="Refrescar"
@@ -177,7 +163,7 @@ export function NotificationsDropdown({
                 <div className="text-[12px] text-ink-3 text-center py-[24px] px-[16px]">
                   No pudimos cargar las notificaciones.
                   <button
-                    onClick={() => void refetch()}
+                    onClick={() => refetch()}
                     className="block mx-auto mt-[8px] text-[12px] underline text-ink-1"
                     style={{ background: "transparent", border: 0, cursor: "pointer" }}
                   >
@@ -239,10 +225,17 @@ function NotificationItem({
   confirming: boolean;
 }) {
   const created = appt.created_at ? new Date(appt.created_at) : null;
+  const past = isAppointmentPast(appt);
+  const showConfirm = appt.status === "pending" && !past;
+
   return (
     <li
       className="rounded-[10px] px-[12px] py-[10px] flex flex-col gap-[6px]"
-      style={{ background: "var(--surface)", border: "1px solid var(--line)" }}
+      style={{
+        background: "var(--surface)",
+        border: "1px solid var(--line)",
+        opacity: past ? 0.7 : 1,
+      }}
     >
       <div className="flex items-center gap-[8px] flex-wrap">
         <span className="text-[13px] font-semibold text-ink-1 truncate flex-1 min-w-0">
@@ -250,6 +243,18 @@ function NotificationItem({
         </span>
         <StatusPill status={appt.status} />
         <SourcePill source={appt.source} />
+        {past && (
+          <span
+            className="text-[10px] font-mono uppercase tracking-[0.08em] px-[6px] py-[2px] rounded-[6px]"
+            style={{
+              background: "var(--line-2)",
+              color: "var(--ink-3)",
+            }}
+            title="El horario del turno ya pasó"
+          >
+            Vencido
+          </span>
+        )}
       </div>
 
       <div className="text-[11.5px] text-ink-2 leading-[1.3]">
@@ -268,7 +273,7 @@ function NotificationItem({
         <span className="text-[10.5px] font-mono text-ink-3 flex-1">
           {created ? formatRelative(created) : ""}
         </span>
-        {appt.status === "pending" && (
+        {showConfirm && (
           <button
             onClick={onConfirm}
             disabled={confirming}

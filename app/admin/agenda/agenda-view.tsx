@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { usePushNotifications } from "@/lib/use-push-notifications";
+import { isAppointmentPast } from "@/lib/use-notifications-feed";
 import type { Appointment, AvailableSlot, Resource, Service } from "@/types/api";
 import { useAdminStore } from "@/store/admin";
 import { AdminHeader } from "@/components/admin/admin-header";
@@ -584,11 +585,19 @@ function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNote
 
           {/* Actions */}
           <div className="flex flex-col gap-[8px] mt-[20px]">
-            {appt.status === "pending" && (
+            {appt.status === "pending" && !isAppointmentPast(appt) && (
               <Btn onClick={onConfirm} loading={loading} disabled={loading} size="lg" full className="gap-2">
                 {!loading && <><Icon name="check" size={16} color="var(--bg)" /> Confirmar turno</>}
                 {loading && "Confirmando..."}
               </Btn>
+            )}
+            {appt.status === "pending" && isAppointmentPast(appt) && (
+              <div
+                className="text-[12px] text-ink-3 text-center px-[12px] py-[10px] rounded"
+                style={{ background: "var(--line-2)" }}
+              >
+                Este turno ya venció y no puede confirmarse.
+              </div>
             )}
             {appt.status !== "cancelled" && (
               <Btn variant="secondary" size="lg" full onClick={() => setCancelStage("choose")} disabled={loading} className="text-danger">
@@ -977,7 +986,6 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
       <AdminHeader
         title={formatDateLabel(selectedDate)}
         subtitle={tenantName}
-        notifCount={counts.pending}
         tenantId={tenantId}
         onEnablePushNotifications={requestPermission}
         isPushEnabled={isSubscribed}

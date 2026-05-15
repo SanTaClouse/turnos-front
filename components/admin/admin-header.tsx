@@ -3,12 +3,11 @@
 import { useRef, useState } from "react";
 import { Icon } from "@/components/ui/icon";
 import { NotificationsDropdown } from "@/components/admin/notifications-dropdown";
+import { useNotificationsFeed } from "@/lib/use-notifications-feed";
 
 interface AdminHeaderProps {
   title: string;
   subtitle?: string;
-  /** Cantidad de turnos pendientes — se muestra como badge sobre la campana. */
-  notifCount?: number;
   rightAction?: React.ReactNode;
   /**
    * Si se pasa tenantId, el header habilita el dropdown de notificaciones
@@ -24,7 +23,6 @@ interface AdminHeaderProps {
 export function AdminHeader({
   title,
   subtitle,
-  notifCount = 0,
   rightAction,
   tenantId,
   isPushEnabled,
@@ -32,6 +30,22 @@ export function AdminHeader({
 }: AdminHeaderProps) {
   const [open, setOpen] = useState(false);
   const bellRef = useRef<HTMLButtonElement>(null);
+
+  // Feed unificado: el badge cuenta sólo notificaciones nuevas (creadas
+  // después del último vistazo, no canceladas y todavía no vencidas) para
+  // que el número sea accionable.
+  const feed = useNotificationsFeed(tenantId ?? "", { enabled: !!tenantId });
+  const newCount = feed.newCount;
+
+  const toggleOpen = () => {
+    setOpen((v) => {
+      const next = !v;
+      // Marcar como visto al abrir: el badge desaparece en el mismo gesto
+      // en el que el admin ve las notificaciones.
+      if (next) feed.markAllSeen();
+      return next;
+    });
+  };
 
   return (
     <div className="flex-shrink-0 px-[20px] pt-[8px] pb-[12px] bg-bg relative">
@@ -48,7 +62,7 @@ export function AdminHeader({
         {tenantId && (
           <button
             ref={bellRef}
-            onClick={() => setOpen((v) => !v)}
+            onClick={toggleOpen}
             className="press-fx relative w-[40px] h-[40px] rounded-full bg-surface border border-line flex items-center justify-center"
             aria-label="Notificaciones"
             aria-expanded={open}
@@ -59,13 +73,13 @@ export function AdminHeader({
               size={18}
               color={isPushEnabled ? "var(--accent)" : "var(--ink-1)"}
             />
-            {notifCount > 0 && (
+            {newCount > 0 && (
               <span className="absolute top-[6px] right-[6px] min-w-[16px] h-[16px] px-[3px] rounded-full bg-accent text-white text-[9px] font-semibold flex items-center justify-center">
-                {notifCount > 99 ? "99+" : notifCount}
+                {newCount > 99 ? "99+" : newCount}
               </span>
             )}
             {/* Punto sutil cuando push no está habilitado, para invitar al usuario a abrir el dropdown */}
-            {!isPushEnabled && notifCount === 0 && (
+            {!isPushEnabled && newCount === 0 && (
               <span
                 className="absolute top-[8px] right-[8px] w-[7px] h-[7px] rounded-full"
                 style={{ background: "var(--status-pending)" }}
@@ -80,12 +94,16 @@ export function AdminHeader({
         <NotificationsDropdown
           open={open}
           onClose={() => setOpen(false)}
-          tenantId={tenantId}
           isPushEnabled={!!isPushEnabled}
           onEnablePush={() => {
             onEnablePushNotifications?.();
           }}
           anchorRef={bellRef}
+          recent={feed.recent}
+          isLoading={feed.isLoading}
+          isError={feed.isError}
+          refetch={() => void feed.refetch()}
+          confirmMutation={feed.confirmMutation}
         />
       )}
     </div>
