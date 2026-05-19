@@ -102,3 +102,99 @@ export interface Availability {
   tenant_id: string;
   resource_id: string;
 }
+
+export interface BlockedSlot {
+  id: string;
+  date: string;            // YYYY-MM-DD (inicio)
+  end_date: string | null; // YYYY-MM-DD (fin) — null = un solo día
+  start_time: string | null; // HH:MM — null = día completo
+  end_time: string | null;   // HH:MM — null = día completo
+  reason: string | null;
+  tenant_id: string;
+  resource_id: string | null; // null = bloquea TODOS los recursos
+}
+
+// ──────────── Earnings ────────────
+
+export type EarningsPeriod = "dia" | "semana" | "mes";
+
+export interface EarningsResult {
+  period: EarningsPeriod;
+  label: string;
+  range: { from: string; to: string };
+  previousRange: { from: string; to: string };
+  total: number;
+  prev: number;
+  breakdown: number[];
+  labels: string[];
+  services: Array<{
+    service_id: string | null;
+    name: string;
+    count: number;
+    total: number;
+  }>;
+  pros: Array<{
+    resource_id: string | null;
+    name: string;
+    hue: number;
+    count: number;
+    total: number;
+  }>;
+}
+
+// ──────────── Exports ────────────
+
+export interface ExportLogSummary {
+  id: string;
+  range_from: string;
+  range_to: string;
+  status_filter: string;
+  row_count: number;
+  created_at: string;
+  exported_by: string | null;
+}
+
+export interface ExportPreview {
+  rowCount: number;
+  totalRevenue: number;
+  hash: string;
+  duplicates: {
+    exactRange: ExportLogSummary | null;
+    exactRows: ExportLogSummary | null;
+    overlappingRanges: ExportLogSummary[];
+  };
+}
+
+// ──────────── AI Summaries ────────────
+
+export interface SummaryInsight {
+  kind:
+    | "top_resource"
+    | "top_service"
+    | "best_day"
+    | "worst_day"
+    | "loyal_clients"
+    | "top_hour";
+  icon: string;
+  accent: string;
+  accentBg: string;
+  title: string;
+  body: string;
+}
+
+export interface MonthlySummary {
+  id: string;
+  tenant_id: string;
+  month: string; // YYYY-MM
+  hero: {
+    revenue: number;
+    prev_revenue: number | null;
+    delta_pct: number | null;
+    appointments: number;
+  };
+  insights: SummaryInsight[];
+  model: string;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  generated_at: string;
+}
