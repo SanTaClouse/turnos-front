@@ -7,7 +7,6 @@ import { Icon } from "@/components/ui/icon";
 const tabs = [
   { id: "agenda",    label: "Agenda",    icon: "calendar" as const, href: "/admin/agenda" },
   { id: "clientes",  label: "Clientes",  icon: "user"     as const, href: "/admin/clientes" },
-  { id: "bloqueos",  label: "Bloqueos",  icon: "lock"     as const, href: "/admin/bloqueos" },
   { id: "servicios", label: "Servicios", icon: "scissors" as const, href: "/admin/servicios" },
   { id: "ganancias", label: "Ganancias", icon: "chart"    as const, href: "/admin/ganancias" },
   { id: "ajustes",   label: "Ajustes",   icon: "settings" as const, href: "/admin/ajustes" },

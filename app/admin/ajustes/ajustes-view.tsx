@@ -522,6 +522,13 @@ export function AjustesView({
           />
           <Divider />
           <SectionRow
+            icon="lock"
+            title="Bloqueos"
+            subtitle="Feriados, vacaciones, franjas no disponibles"
+            onClick={() => router.push("/admin/bloqueos")}
+          />
+          <Divider />
+          <SectionRow
             icon="bell"
             title="Recordatorios"
             subtitle="24hs antes por WhatsApp"
