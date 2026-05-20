@@ -1,19 +1,13 @@
 import { ImageResponse } from "next/og";
+import { loadInstrumentSerif } from "@/lib/og-fonts";
 
-async function loadFont() {
-  const response = await fetch(
-    "https://fonts.gstatic.com/s/instrumentserif/v13/jizYREVItHgc8qBvXZLDC6sJAPkjBltA.woff2"
-  );
-  return response.arrayBuffer();
-}
-
-export const dynamic = "force-dynamic";
 export const alt = "Turno1Min · Tu agenda en 1 minuto";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
+export const revalidate = 3600;
 
 export default async function OgImage() {
-  const fontData = await loadFont();
+  const fonts = await loadInstrumentSerif();
   // Tokens del design system (idénticos a globals.css)
   const BG = "#fafaf7";
   const SURFACE = "#ffffff";
@@ -361,12 +355,10 @@ export default async function OgImage() {
     {
       ...size,
       fonts: [
-        {
-          name: "Instrument Serif",
-          data: fontData,
-          style: "normal",
-          weight: 400,
-        },
+        { name: "Instrument Serif", data: fonts.regular, style: "normal", weight: 400 },
+        ...(fonts.italic
+          ? [{ name: "Instrument Serif" as const, data: fonts.italic, style: "italic" as const, weight: 400 as const }]
+          : []),
       ],
     },
   );

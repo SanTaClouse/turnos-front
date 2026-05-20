@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { api } from "@/lib/api";
+import { loadInstrumentSerif } from "@/lib/og-fonts";
 import type { Tenant } from "@/types/api";
 
 export const alt = "Reservá tu turno online";
@@ -17,17 +18,6 @@ const INK_2 = "#52514d";
 const INK_3 = "#8a8984";
 const LINE = "#ebeae3";
 const ACCENT = "#e8725a";
-
-// woff2 latin de Google Fonts — subset que cubre español completo (ñ, á, é, í, ó, ú, ü).
-const INSTRUMENT_SERIF_REGULAR =
-  "https://fonts.gstatic.com/s/instrumentserif/v5/jizBRFtNs2ka5fXjeivQ4LroWlx-6zUTjg.woff2";
-const INSTRUMENT_SERIF_ITALIC =
-  "https://fonts.gstatic.com/s/instrumentserif/v5/jizHRFtNs2ka5fXjeivQ4LroWlx-6zAjjH7M.woff2";
-
-async function fetchBuffer(url: string): Promise<ArrayBuffer> {
-  const res = await fetch(url, { cache: "force-cache" });
-  return res.arrayBuffer();
-}
 
 function getInitials(name: string): string {
   const parts = name.split(/\s+/).filter(Boolean);
@@ -49,9 +39,8 @@ function fitName(name: string): { text: string; size: number } {
 
 export default async function OgImage({ params }: { params: { slug: string } }) {
   // Fetch en paralelo: fonts + tenant. La performance crítica es el primer share en WhatsApp.
-  const [serifRegular, serifItalic, tenant] = await Promise.all([
-    fetchBuffer(INSTRUMENT_SERIF_REGULAR),
-    fetchBuffer(INSTRUMENT_SERIF_ITALIC),
+  const [fonts, tenant] = await Promise.all([
+    loadInstrumentSerif(),
     api.get<Tenant>(`/tenants/slug/${params.slug}`).catch(() => null),
   ]);
 
@@ -284,8 +273,10 @@ export default async function OgImage({ params }: { params: { slug: string } }) 
     {
       ...size,
       fonts: [
-        { name: "Instrument Serif", data: serifRegular, style: "normal", weight: 400 },
-        { name: "Instrument Serif", data: serifItalic, style: "italic", weight: 400 },
+        { name: "Instrument Serif", data: fonts.regular, style: "normal", weight: 400 },
+        ...(fonts.italic
+          ? [{ name: "Instrument Serif" as const, data: fonts.italic, style: "italic" as const, weight: 400 as const }]
+          : []),
       ],
     },
   );
