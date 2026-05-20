@@ -39,8 +39,33 @@ interface BookingStore extends BookingChoice {
   nextStep: () => void;
   goToStep: (step: number) => void;
   confirm: (appointmentId: string, tenantName: string, tenantAddress: string | null, tenantInitials: string, countryCode?: string) => void;
+  resetFlow: () => void;
   reset: () => void;
 }
+
+// Campos del flujo (lo que el usuario elige paso a paso). Se limpia
+// después de confirmar; NO incluye datos del cliente, que queremos
+// preservar para auto-completar futuras reservas.
+const flowFields: Pick<
+  BookingChoice,
+  | "serviceId"
+  | "serviceName"
+  | "serviceDuration"
+  | "servicePrice"
+  | "date"
+  | "time"
+  | "resourceId"
+  | "resourceName"
+> = {
+  serviceId: null,
+  serviceName: null,
+  serviceDuration: null,
+  servicePrice: null,
+  date: null,
+  time: null,
+  resourceId: null,
+  resourceName: null,
+};
 
 const initialChoice: BookingChoice = {
   serviceId: null,
@@ -81,6 +106,13 @@ export const useBookingStore = create<BookingStore>()(
 
       confirm: (appointmentId, tenantName, tenantAddress, tenantInitials, countryCode = "+54") => {
         const s = get();
+        // Solo seteamos `confirmed` — NO reseteamos el flow acá.
+        // Si reseteamos sincrónicamente, el componente BookingFlow re-renderiza
+        // mostrando step 0 (servicios) durante el ms entre confirm() y
+        // router.push("/ok"). Eso es la "pantalla intermedia" que se veía
+        // antes del ticket. La limpieza del flow la hace /reservar/ok al
+        // montar, cuando ya estamos seguros que el usuario no está mirando
+        // el BookingFlow.
         set({
           confirmed: {
             appointmentId,
@@ -102,10 +134,14 @@ export const useBookingStore = create<BookingStore>()(
             clientEmail: s.clientEmail,
             notes: s.notes,
           },
-          step: 0,
-          ...initialChoice,
         });
       },
+
+      // Limpia step + elecciones del flujo (servicio, fecha, hora, etc.)
+      // pero mantiene `confirmed` y datos del cliente (clientName, phone,
+      // email, notes) — esos últimos sirven para auto-completar la próxima
+      // reserva.
+      resetFlow: () => set({ step: 0, ...flowFields }),
 
       reset: () => set({ step: 0, confirmed: null, ...initialChoice }),
     }),

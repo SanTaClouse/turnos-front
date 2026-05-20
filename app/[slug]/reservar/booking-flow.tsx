@@ -607,9 +607,12 @@ export function BookingFlow({ tenant, services, resources, availableDaysOfWeek }
       });
       store.confirm(appt.id, tenant.name, tenant.address, initials, countryCode);
       router.push(`/${tenant.slug}/reservar/ok`);
+      // Importante: NO reseteamos `submitting` acá. Mantener el botón en
+      // estado de carga durante la transición evita que el Review parpadee
+      // de vuelta a "Confirmar reserva" antes de que monte /ok. El
+      // componente se desmonta al navegar, así que el estado se descarta.
     } catch (e: unknown) {
       setSubmitError(e instanceof Error ? e.message : "No se pudo confirmar. Intentá de nuevo.");
-    } finally {
       setSubmitting(false);
     }
   };

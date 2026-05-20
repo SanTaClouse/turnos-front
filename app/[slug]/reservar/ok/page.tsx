@@ -214,6 +214,15 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
     return unsub;
   }, [hydrated]);
 
+  // Una vez mostrado el ticket, limpiamos el flow del booking (step,
+  // servicio, fecha, hora) para que si el usuario vuelve a /reservar
+  // —vía "Reservar otro turno" o el botón back— arranque limpio.
+  // Mantiene `confirmed` y datos del cliente intactos.
+  useEffect(() => {
+    if (!hydrated) return;
+    useBookingStore.getState().resetFlow();
+  }, [hydrated]);
+
   if (!hydrated) return <TicketLoading />;
 
   // Si ya hidrató y no hay datos confirmados, mostrar fallback
@@ -310,15 +319,15 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
 
         {/* Aviso screenshot */}
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
+          initial={{ opacity: 0, y: 6 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.0, duration: 0.4 }}
-          className="mt-[20px] flex items-start gap-[12px] px-[14px] py-[12px] bg-accent/10 border border-accent rounded-[12px]"
+          className="mt-[14px] flex items-center justify-center gap-[6px] text-[11px] text-ink-3"
         >
-          <Icon name="image" size={18} color="var(--accent)" className="flex-shrink-0 mt-[1px]" />
-          <p className="text-[13px] text-ink-2 leading-[1.5]">
-            <strong>Sacá una captura de pantalla</strong> para no perderlo. Te enviaremos el detalle por email al confirmar el turno.
-          </p>
+          <Icon name="image" size={12} color="var(--ink-3)" className="flex-shrink-0" />
+          <span>
+            Sacá una <span className="text-ink-2 font-medium">captura</span> para no perderlo
+          </span>
         </motion.div>
 
         {/* Acciones */}
