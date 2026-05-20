@@ -6,37 +6,59 @@ export const alt = "Reservá tu turno online";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
+// Cacheamos a nivel CDN: tenant data cambia poco, regeneramos cada hora.
+export const revalidate = 3600;
+
+// Tokens del design system (idénticos a globals.css).
+const BG = "#fafaf7";
+const SURFACE = "#ffffff";
+const INK_1 = "#0f0f0e";
+const INK_2 = "#52514d";
+const INK_3 = "#8a8984";
+const LINE = "#ebeae3";
+const ACCENT = "#e8725a";
+
+// woff2 latin de Google Fonts — subset que cubre español completo (ñ, á, é, í, ó, ú, ü).
+const INSTRUMENT_SERIF_REGULAR =
+  "https://fonts.gstatic.com/s/instrumentserif/v5/jizBRFtNs2ka5fXjeivQ4LroWlx-6zUTjg.woff2";
+const INSTRUMENT_SERIF_ITALIC =
+  "https://fonts.gstatic.com/s/instrumentserif/v5/jizHRFtNs2ka5fXjeivQ4LroWlx-6zAjjH7M.woff2";
+
+async function fetchBuffer(url: string): Promise<ArrayBuffer> {
+  const res = await fetch(url, { cache: "force-cache" });
+  return res.arrayBuffer();
+}
+
 function getInitials(name: string): string {
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0])
-    .join("")
-    .toUpperCase();
+  const parts = name.split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "T1";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[1][0]).toUpperCase();
+}
+
+// Tamaño tipográfico adaptativo — nombres largos no rompen el layout.
+function fitName(name: string): { text: string; size: number } {
+  const n = name.trim();
+  if (n.length <= 10) return { text: n, size: 148 };
+  if (n.length <= 14) return { text: n, size: 124 };
+  if (n.length <= 18) return { text: n, size: 104 };
+  if (n.length <= 24) return { text: n, size: 84 };
+  if (n.length <= 32) return { text: n, size: 68 };
+  return { text: n.slice(0, 30).trimEnd() + "…", size: 64 };
 }
 
 export default async function OgImage({ params }: { params: { slug: string } }) {
-  let tenant: Tenant | null = null;
-  try {
-    tenant = await api.get<Tenant>(`/tenants/slug/${params.slug}`);
-  } catch {
-    // tenant no existe → fallback genérico
-  }
+  // Fetch en paralelo: fonts + tenant. La performance crítica es el primer share en WhatsApp.
+  const [serifRegular, serifItalic, tenant] = await Promise.all([
+    fetchBuffer(INSTRUMENT_SERIF_REGULAR),
+    fetchBuffer(INSTRUMENT_SERIF_ITALIC),
+    api.get<Tenant>(`/tenants/slug/${params.slug}`).catch(() => null),
+  ]);
 
   const name = tenant?.name ?? "Reservá tu turno";
-  const subtitle = tenant?.description ?? tenant?.address ?? "Reservá online en segundos";
-  const initials = tenant ? getInitials(tenant.name) : "✓";
+  const initials = tenant ? getInitials(tenant.name) : "T1";
+  const fitted = fitName(name);
   const slug = params.slug;
-
-  // Tokens del design system (inline porque next/og no soporta CSS custom props)
-  const BG = "#fafaf7";
-  const SURFACE = "#ffffff";
-  const INK_1 = "#0f0f0e";
-  const INK_2 = "#52514d";
-  const INK_3 = "#8a8984";
-  const LINE = "#ebeae3";
-  const ACCENT = "#e8725a";
 
   return new ImageResponse(
     (
@@ -47,11 +69,12 @@ export default async function OgImage({ params }: { params: { slug: string } }) 
           display: "flex",
           flexDirection: "column",
           background: BG,
-          padding: "80px 96px",
-          fontFamily: "system-ui, -apple-system, sans-serif",
+          padding: "60px 72px",
+          fontFamily: '"Inter Tight", system-ui, sans-serif',
+          position: "relative",
         }}
       >
-        {/* Top: BrandMark + slug */}
+        {/* ── Top bar: Turno1Min wordmark + /slug pill ── */}
         <div
           style={{
             display: "flex",
@@ -59,46 +82,61 @@ export default async function OgImage({ params }: { params: { slug: string } }) 
             justifyContent: "space-between",
           }}
         >
-          <div
-            style={{
-              width: 120,
-              height: 120,
-              borderRadius: 34,
-              background: INK_1,
-              color: BG,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontFamily: "Georgia, serif",
-              fontStyle: "italic",
-              fontSize: 60,
-              letterSpacing: "-2px",
-            }}
-          >
-            {initials}
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 12,
+                background: INK_1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontFamily: '"Instrument Serif"',
+                fontStyle: "italic",
+                fontSize: 30,
+                lineHeight: 1,
+                paddingBottom: 4,
+              }}
+            >
+              <span style={{ color: BG, display: "flex" }}>T</span>
+              <span style={{ color: ACCENT, display: "flex", marginLeft: 1 }}>1</span>
+            </div>
+            <div
+              style={{
+                fontFamily: '"Instrument Serif"',
+                fontSize: 24,
+                color: INK_1,
+                letterSpacing: "-0.4px",
+                display: "flex",
+              }}
+            >
+              <span>Turno</span>
+              <span style={{ color: ACCENT, fontStyle: "italic" }}>1</span>
+              <span>Min</span>
+            </div>
           </div>
 
-          {/* Pill: dominio público */}
           <div
             style={{
               display: "flex",
               alignItems: "center",
-              gap: 12,
+              gap: 10,
               background: SURFACE,
               border: `1px solid ${LINE}`,
               borderRadius: 999,
-              padding: "14px 22px",
+              padding: "10px 20px",
               fontFamily: "ui-monospace, Menlo, monospace",
-              fontSize: 22,
+              fontSize: 18,
               color: INK_2,
-              letterSpacing: "-0.3px",
+              letterSpacing: "-0.2px",
             }}
           >
             <div
               style={{
-                width: 10,
-                height: 10,
-                borderRadius: 999,
+                width: 8,
+                height: 8,
+                borderRadius: 99,
                 background: ACCENT,
               }}
             />
@@ -106,83 +144,149 @@ export default async function OgImage({ params }: { params: { slug: string } }) 
           </div>
         </div>
 
-        {/* Middle: nombre + tagline */}
+        {/* ── Hero: nombre del negocio + brand mark ── */}
         <div
           style={{
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "center",
             flex: 1,
-            paddingTop: 40,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: 56,
+            paddingTop: 12,
           }}
         >
           <div
             style={{
-              fontFamily: "Georgia, serif",
-              fontSize: 96,
-              lineHeight: 1.05,
-              letterSpacing: "-3px",
-              color: INK_1,
-              maxWidth: "100%",
               display: "flex",
+              flexDirection: "column",
+              flex: 1,
+              minWidth: 0,
             }}
           >
-            {name.length > 28 ? name.slice(0, 26) + "…" : name}
+            {/* Eyebrow */}
+            <div
+              style={{
+                fontFamily: "ui-monospace, Menlo, monospace",
+                fontSize: 14,
+                color: INK_3,
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+                display: "flex",
+                marginBottom: 18,
+              }}
+            >
+              Reservá tu turno en
+            </div>
+
+            {/* Nombre del negocio */}
+            <div
+              style={{
+                fontFamily: '"Instrument Serif"',
+                fontSize: fitted.size,
+                lineHeight: 0.98,
+                letterSpacing: "-3px",
+                color: INK_1,
+                display: "flex",
+              }}
+            >
+              {fitted.text}
+            </div>
+
+            {/* CTA serif */}
+            <div
+              style={{
+                fontFamily: '"Instrument Serif"',
+                fontSize: 40,
+                marginTop: 28,
+                color: INK_2,
+                letterSpacing: "-0.8px",
+                lineHeight: 1,
+                display: "flex",
+                alignItems: "baseline",
+              }}
+            >
+              <span>en </span>
+              <span style={{ color: ACCENT, fontStyle: "italic", marginLeft: 8 }}>
+                segundos
+              </span>
+              <span style={{ color: ACCENT, marginLeft: 12 }}>→</span>
+            </div>
           </div>
+
+          {/* BrandMark XL — mismo formato que la landing (italic Instrument Serif) */}
           <div
             style={{
-              fontSize: 32,
-              color: INK_2,
-              marginTop: 24,
-              lineHeight: 1.4,
-              letterSpacing: "-0.5px",
-              maxWidth: 900,
+              width: 240,
+              height: 240,
+              borderRadius: 56,
+              background: INK_1,
               display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontFamily: '"Instrument Serif"',
+              fontStyle: "italic",
+              fontSize: 140,
+              lineHeight: 1,
+              color: BG,
+              letterSpacing: "-3px",
+              paddingBottom: 10,
+              flexShrink: 0,
+              boxShadow:
+                "0 30px 60px -20px rgba(15,15,14,0.18), 0 12px 24px -10px rgba(15,15,14,0.10)",
             }}
           >
-            {subtitle.length > 90 ? subtitle.slice(0, 88) + "…" : subtitle}
+            {initials}
           </div>
         </div>
 
-        {/* Bottom: CTA pill */}
+        {/* ── Footer: URL + tagline ── */}
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            gap: 16,
-            marginTop: "auto",
+            justifyContent: "space-between",
+            paddingTop: 28,
+            borderTop: `1px solid ${LINE}`,
+            fontFamily: "ui-monospace, Menlo, monospace",
+            fontSize: 16,
+            color: INK_3,
+            letterSpacing: "0.06em",
+            textTransform: "uppercase",
           }}
         >
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 14,
-              background: INK_1,
-              color: BG,
-              borderRadius: 18,
-              padding: "22px 32px",
-              fontSize: 28,
-              fontWeight: 500,
-              letterSpacing: "-0.5px",
-            }}
-          >
-            Reservá tu turno
-            <div style={{ fontSize: 26, color: ACCENT }}>→</div>
-          </div>
-          <div
-            style={{
-              fontSize: 18,
-              color: INK_3,
-              letterSpacing: "-0.2px",
-              display: "flex",
-            }}
-          >
-            Online · Sin esperas · Confirmación inmediata
+          <span style={{ display: "flex" }}>turno1min.app/{slug}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <span style={{ display: "flex" }}>Online</span>
+            <div
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: 99,
+                background: INK_3,
+                opacity: 0.5,
+              }}
+            />
+            <span style={{ display: "flex" }}>Sin esperas</span>
+            <div
+              style={{
+                width: 4,
+                height: 4,
+                borderRadius: 99,
+                background: INK_3,
+                opacity: 0.5,
+              }}
+            />
+            <span style={{ display: "flex" }}>Confirmación inmediata</span>
           </div>
         </div>
       </div>
     ),
-    size,
+    {
+      ...size,
+      fonts: [
+        { name: "Instrument Serif", data: serifRegular, style: "normal", weight: 400 },
+        { name: "Instrument Serif", data: serifItalic, style: "italic", weight: 400 },
+      ],
+    },
   );
 }
