@@ -337,13 +337,24 @@ function StepDetails({ initial, onContinue, countryCode = "+54" }: {
   const emoji = countryEmojis[country] || "🌐";
   const countryOptions = ["+54", "+52", "+55", "+1", "+56", "+57", "+58", "+34"];
 
+  // Envolvemos en <form> para que iOS reconozca el contexto y ofrezca autofill.
+  // onSubmit no navega (preventDefault) — el botón usa onClick existente.
   return (
-    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ type: "spring", stiffness: 380, damping: 30, delay: 0.2 }}
-      className="mt-[14px] flex flex-col gap-[10px]">
+    <motion.form
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 380, damping: 30, delay: 0.2 }}
+      className="mt-[14px] flex flex-col gap-[10px]"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (ok) onContinue(name, phone, email, notes, country);
+      }}
+      autoComplete="on"
+    >
       {/* Teléfono */}
       <div>
         <div className="flex justify-between items-baseline mb-[6px]">
-          <label className="text-[12px] font-medium text-ink-2">Teléfono</label>
+          <label htmlFor="booking-phone" className="text-[12px] font-medium text-ink-2">Teléfono</label>
         </div>
         <div className="flex gap-[6px]">
           <select
@@ -351,6 +362,7 @@ function StepDetails({ initial, onContinue, countryCode = "+54" }: {
             onChange={(e) => setCountry(e.target.value)}
             className="h-[48px] border border-line bg-surface rounded-sm px-[10px] text-[14px] font-medium text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent flex-shrink-0"
             style={{ fontFamily: "inherit" }}
+            aria-label="Código de país"
           >
             {countryOptions.map((cc) => (
               <option key={cc} value={cc}>
@@ -359,6 +371,10 @@ function StepDetails({ initial, onContinue, countryCode = "+54" }: {
             ))}
           </select>
           <input
+            id="booking-phone"
+            name="phone"
+            type="tel"
+            autoComplete="tel-national"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="11 5555 2200"
@@ -371,8 +387,12 @@ function StepDetails({ initial, onContinue, countryCode = "+54" }: {
 
       {/* Nombre */}
       <div>
-        <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">Nombre</label>
+        <label htmlFor="booking-name" className="block text-[12px] font-medium text-ink-2 mb-[6px]">Nombre</label>
         <input
+          id="booking-name"
+          name="name"
+          type="text"
+          autoComplete="name"
           value={name}
           onChange={(e) => setName(e.target.value)}
           placeholder="Tu nombre"
@@ -384,16 +404,21 @@ function StepDetails({ initial, onContinue, countryCode = "+54" }: {
       {/* Email */}
       <div>
         <div className="flex justify-between items-baseline mb-[6px]">
-          <label className="text-[12px] font-medium text-ink-2">Email</label>
+          <label htmlFor="booking-email" className="text-[12px] font-medium text-ink-2">Email</label>
           <span className="label-mono">Recomendado</span>
         </div>
         <input
+          id="booking-email"
+          name="email"
+          type="email"
+          autoComplete="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="tu@email.com"
           inputMode="email"
           autoCapitalize="off"
           autoCorrect="off"
+          spellCheck={false}
           className={inputClass + (email && !emailValid ? " !border-danger" : "")}
           style={{ fontFamily: "inherit" }}
         />
@@ -405,10 +430,13 @@ function StepDetails({ initial, onContinue, countryCode = "+54" }: {
       {/* Notas */}
       <div>
         <div className="flex justify-between items-baseline mb-[6px]">
-          <label className="text-[12px] font-medium text-ink-2">Notas</label>
+          <label htmlFor="booking-notes" className="text-[12px] font-medium text-ink-2">Notas</label>
           <span className="label-mono">Opcional</span>
         </div>
         <textarea
+          id="booking-notes"
+          name="notes"
+          autoComplete="off"
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
           placeholder="¿Algo que quieras avisar?"
@@ -418,10 +446,10 @@ function StepDetails({ initial, onContinue, countryCode = "+54" }: {
         />
       </div>
 
-      <Btn onClick={() => onContinue(name, phone, email, notes, country)} disabled={!ok} size="lg" full className="mt-[6px] gap-2">
+      <Btn type="submit" disabled={!ok} size="lg" full className="mt-[6px] gap-2">
         Revisar reserva <Icon name="forward" size={16} color="var(--bg)" />
       </Btn>
-    </motion.div>
+    </motion.form>
   );
 }
 

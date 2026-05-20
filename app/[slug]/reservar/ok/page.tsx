@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useBookingStore } from "@/store/booking";
@@ -147,13 +147,76 @@ function DetailLine({ label, value, mono = false }: { label: string; value: stri
   );
 }
 
+// ─── Loading skeleton (durante hidratación) ────────────────
+function TicketLoading() {
+  return (
+    <div className="min-h-screen bg-bg flex flex-col" style={{ maxWidth: 430, margin: "0 auto" }}>
+      <div className="flex-1 overflow-y-auto hide-scroll px-[24px] pb-[20px]">
+        {/* Check pulse */}
+        <div className="flex justify-center mt-[40px]">
+          <motion.div
+            className="w-[96px] h-[96px] rounded-full bg-line-2"
+            animate={{ opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 1.4, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+        {/* Título placeholder */}
+        <div className="mt-[28px] flex flex-col items-center gap-[10px]">
+          <div className="h-[28px] w-[240px] rounded bg-line-2 animate-pulse" />
+          <div className="h-[14px] w-[180px] rounded bg-line-2 animate-pulse mt-[10px]" />
+        </div>
+        {/* Ticket placeholder */}
+        <div className="mt-[28px] bg-surface border border-line rounded-lg overflow-hidden">
+          <div className="flex items-center gap-[12px] px-[18px] py-[16px] border-b border-dashed border-line">
+            <div className="w-[36px] h-[36px] rounded-[8px] bg-line-2 animate-pulse" />
+            <div className="flex-1 flex flex-col gap-[6px]">
+              <div className="h-[14px] w-[120px] rounded bg-line-2 animate-pulse" />
+              <div className="h-[10px] w-[80px] rounded bg-line-2 animate-pulse" />
+            </div>
+          </div>
+          <div className="px-[18px] py-[24px] flex flex-col items-center gap-[10px]">
+            <div className="h-[10px] w-[60px] rounded bg-line-2 animate-pulse" />
+            <div className="h-[36px] w-[180px] rounded bg-line-2 animate-pulse" />
+            <div className="h-[12px] w-[100px] rounded bg-line-2 animate-pulse" />
+          </div>
+          <div className="h-[1px] bg-line mx-[18px]" />
+          <div className="px-[18px] py-[18px] flex flex-col gap-[10px]">
+            {[0, 1, 2, 3].map((i) => (
+              <div key={i} className="flex justify-between">
+                <div className="h-[10px] w-[60px] rounded bg-line-2 animate-pulse" />
+                <div className="h-[10px] w-[100px] rounded bg-line-2 animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ──────────────────────────────────────────────────
 export default function SuccessPage({ params }: { params: { slug: string } }) {
   const router = useRouter();
   const confirmed = useBookingStore((s) => s.confirmed);
   const [calOpen, setCalOpen] = useState(false);
 
-  // Si no hay datos confirmados, redirigir a la landing
+  // Zustand persist hidrata async desde localStorage. Antes de saber si hay
+  // o no datos, mostramos un skeleton — no el fallback "No hay turno
+  // confirmado", que es el flash que el usuario veía en producción.
+  const [hydrated, setHydrated] = useState(() =>
+    useBookingStore.persist.hasHydrated(),
+  );
+  useEffect(() => {
+    if (hydrated) return;
+    const unsub = useBookingStore.persist.onFinishHydration(() =>
+      setHydrated(true),
+    );
+    return unsub;
+  }, [hydrated]);
+
+  if (!hydrated) return <TicketLoading />;
+
+  // Si ya hidrató y no hay datos confirmados, mostrar fallback
   if (!confirmed) {
     return (
       <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-[20px] text-center gap-[16px]">

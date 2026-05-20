@@ -111,7 +111,11 @@ export const useBookingStore = create<BookingStore>()(
     }),
     {
       name: "turnosapp-booking",
-      storage: createJSONStorage(() => sessionStorage),
+      // localStorage en vez de sessionStorage: en iOS Safari sessionStorage
+      // a veces no persiste ni dentro de la misma pestaña (PWA / mode webview
+      // / ITP), por eso el cliente re-tipeaba los datos cada vez. localStorage
+      // sí se mantiene → autocompletar para clientes recurrentes sin login.
+      storage: createJSONStorage(() => localStorage),
       // Persistimos SOLO datos personales (para no hacer re-tipearlos si el
       // usuario sale y vuelve) y el snapshot del turno confirmado (necesario
       // para la pantalla /reservar/ok). NO persistimos `step` ni las

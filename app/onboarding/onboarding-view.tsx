@@ -92,10 +92,15 @@ function BusinessStep() {
       </h1>
       <p className="text-[14px] text-ink-2 mt-[8px]">Esto es lo que van a ver tus clientes.</p>
 
-      <div className="mt-[24px] flex flex-col gap-[14px]">
+      {/* form wrapper para que iOS reconozca el contexto y ofrezca autofill */}
+      <form className="mt-[24px] flex flex-col gap-[14px]" onSubmit={(e) => e.preventDefault()} autoComplete="on">
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">Nombre del negocio</label>
+          <label htmlFor="onb-business-name" className="block text-[12px] font-medium text-ink-2 mb-[6px]">Nombre del negocio</label>
           <input
+            id="onb-business-name"
+            name="organization"
+            type="text"
+            autoComplete="organization"
             value={businessName}
             onChange={(e) => set("businessName", e.target.value)}
             placeholder="Corte Moderno"
@@ -112,6 +117,7 @@ function BusinessStep() {
               const active = category === c;
               return (
                 <button
+                  type="button"
                   key={c}
                   onClick={() => set("category", c)}
                   className="press-fx px-[14px] py-[8px] rounded-full text-[13px]"
@@ -131,8 +137,12 @@ function BusinessStep() {
         </div>
 
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">WhatsApp del negocio</label>
+          <label htmlFor="onb-whatsapp" className="block text-[12px] font-medium text-ink-2 mb-[6px]">WhatsApp del negocio</label>
           <input
+            id="onb-whatsapp"
+            name="phone"
+            type="tel"
+            autoComplete="tel"
             value={whatsapp}
             onChange={(e) => set("whatsapp", e.target.value)}
             placeholder="+5491155552200"
@@ -143,10 +153,12 @@ function BusinessStep() {
         </div>
 
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">
+          <label htmlFor="onb-email" className="block text-[12px] font-medium text-ink-2 mb-[6px]">
             Tu email
           </label>
           <input
+            id="onb-email"
+            name="email"
             value={email}
             onChange={(e) => set("email", e.target.value.trim())}
             placeholder="dueno@negocio.com"
@@ -164,10 +176,14 @@ function BusinessStep() {
         </div>
 
         <div>
-          <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">
+          <label htmlFor="onb-address" className="block text-[12px] font-medium text-ink-2 mb-[6px]">
             Dirección <span className="font-mono text-[10px] text-ink-3">opcional</span>
           </label>
           <input
+            id="onb-address"
+            name="street-address"
+            type="text"
+            autoComplete="street-address"
             value={address}
             onChange={(e) => set("address", e.target.value)}
             placeholder="Av. Siempre Viva 742"
@@ -175,7 +191,7 @@ function BusinessStep() {
             style={{ fontFamily: "inherit" }}
           />
         </div>
-      </div>
+      </form>
     </FadeIn>
   );
 }
