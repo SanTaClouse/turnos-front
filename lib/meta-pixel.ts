@@ -11,7 +11,8 @@ export type MetaStandardEvent =
   | "Subscribe"
   | "Lead"
   | "Contact"
-  | "StartTrial";
+  | "StartTrial"
+  | "InitiateCheckout";
 
 type FbqArgs =
   | [command: "init", pixelId: string]
