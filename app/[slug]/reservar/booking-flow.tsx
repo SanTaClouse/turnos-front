@@ -143,10 +143,11 @@ function StepServices({ services, locale, currency, onPick }: {
 }
 
 // ─── Step: Fecha ───────────────────────────────────────────
-function StepDate({ tenantId, serviceId, availableDaysOfWeek, onPick }: {
+function StepDate({ tenantId, serviceId, availableDaysOfWeek, blockedDates, onPick }: {
   tenantId: string;
   serviceId: string;
   availableDaysOfWeek: number[];
+  blockedDates: Set<string>;
   onPick: (date: string) => void;
 }) {
   const dates = generateDates(30);
@@ -158,7 +159,7 @@ function StepDate({ tenantId, serviceId, availableDaysOfWeek, onPick }: {
   // tratamos todos los días como válidos (no bloqueamos el flujo).
   const dowSet = new Set(availableDaysOfWeek);
   const hasRules = availableDaysOfWeek.length > 0;
-  const isDayAvailable = (dateStr: string) => {
+  const isWorkingDay = (dateStr: string) => {
     if (!hasRules) return true;
     const [y, m, d] = dateStr.split("-").map(Number);
     return dowSet.has(new Date(y, m - 1, d).getDay());
@@ -172,24 +173,41 @@ function StepDate({ tenantId, serviceId, availableDaysOfWeek, onPick }: {
           const { dow, day } = formatDateShort(dateStr);
           const isToday = dateStr === todayStr;
           const isPast = dateStr < todayStr;
-          const available = isDayAvailable(dateStr);
-          const disabled = isPast || !available;
+          const isBlocked = blockedDates.has(dateStr);
+          const isOff = !isWorkingDay(dateStr);
+          const disabled = isPast || isOff || isBlocked;
+          const reason = isPast
+            ? undefined
+            : isBlocked
+            ? "Día bloqueado"
+            : isOff
+            ? "Sin atención este día"
+            : undefined;
           return (
             <button
               key={dateStr}
               onClick={() => !disabled && onPick(dateStr)}
               disabled={disabled}
-              title={!available && !isPast ? "Sin atención este día" : undefined}
-              className="press-fx flex-shrink-0 flex flex-col items-center gap-1 py-[10px] bg-surface border border-line rounded-[12px] w-[58px]"
+              title={reason}
+              className="press-fx flex-shrink-0 flex flex-col items-center gap-1 py-[10px] bg-surface border border-line rounded-[12px] w-[58px] relative"
               style={{
                 fontFamily: "inherit",
-                opacity: isPast ? 0.35 : !available ? 0.4 : 1,
+                opacity: isPast ? 0.35 : disabled ? 0.4 : 1,
                 cursor: disabled ? "not-allowed" : "pointer",
               }}
             >
               <span className="font-mono text-[10px] text-ink-3 uppercase tracking-[0.05em]">{dow}</span>
               <span className="text-[20px] font-medium text-ink-1" style={{ letterSpacing: "-0.5px" }}>{day}</span>
-              <span className="w-[4px] h-[4px] rounded-full" style={{ background: isToday ? "var(--accent)" : "var(--line)" }} />
+              <span
+                className="w-[4px] h-[4px] rounded-full"
+                style={{
+                  background: isToday
+                    ? "var(--accent)"
+                    : isBlocked
+                    ? "#c45a3c"
+                    : "var(--line)",
+                }}
+              />
             </button>
           );
         })}
@@ -521,12 +539,14 @@ function SummaryRow({ icon, label, value, meta, onEdit, isLast }: {
 }
 
 // ─── Main: BookingFlow ─────────────────────────────────────
-export function BookingFlow({ tenant, services, resources, availableDaysOfWeek }: {
+export function BookingFlow({ tenant, services, resources, availableDaysOfWeek, blockedDates }: {
   tenant: Tenant;
   services: Service[];
   resources: Resource[];
   availableDaysOfWeek: number[];
+  blockedDates: string[];
 }) {
+  const blockedSet = new Set(blockedDates);
   const router = useRouter();
   const scrollRef = useRef<HTMLDivElement>(null);
   const store = useBookingStore();
@@ -684,6 +704,7 @@ export function BookingFlow({ tenant, services, resources, availableDaysOfWeek }
             tenantId={tenant.id}
             serviceId={store.serviceId!}
             availableDaysOfWeek={availableDaysOfWeek}
+            blockedDates={blockedSet}
             onPick={handleDate}
           />
         )}

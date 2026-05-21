@@ -78,6 +78,11 @@ export interface Appointment {
   status: "pending" | "confirmed" | "cancelled";
   source: "whatsapp" | "web" | "manual";
   notes: string | null;
+  /** Precio efectivamente cobrado. Si está, sobreescribe service.price para
+   *  el cálculo de ganancias. null = usar precio del servicio. */
+  price_override: number | string | null;
+  /** Sobre-turno creado por el admin fuera del slot grid normal. */
+  is_overbooking: boolean;
   created_at: string;
   tenant_id: string;
   client_id: string | null;

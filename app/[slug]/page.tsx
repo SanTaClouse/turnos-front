@@ -6,6 +6,7 @@ import type { Tenant, Service } from "@/types/api";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
+import { ViewContentTracker } from "@/components/providers/ViewContentTracker";
 
 interface Props {
   params: { slug: string };
@@ -76,6 +77,7 @@ export default async function LandingPage({ params }: Props) {
 
   return (
     <div className="min-h-screen bg-bg flex flex-col" style={{ maxWidth: 430, margin: "0 auto" }}>
+      <ViewContentTracker content_name={params.slug} content_category="public_business_landing" />
       <div className="flex-1 overflow-y-auto overflow-x-hidden hide-scroll">
 
         {/* ── Hero ── */}

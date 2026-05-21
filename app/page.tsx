@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { Btn } from "@/components/ui/btn";
 import { getSession } from "@/lib/session";
+import { ViewContentTracker } from "@/components/providers/ViewContentTracker";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,7 @@ export default async function HomePage() {
       className="min-h-screen bg-bg flex flex-col items-center justify-center px-[20px]"
       style={{ maxWidth: 430, margin: "0 auto" }}
     >
+      <ViewContentTracker content_name="home" content_category="sales_landing" />
       <div
         className="font-serif text-hero text-center"
         style={{ letterSpacing: "-1px", lineHeight: 1.05 }}

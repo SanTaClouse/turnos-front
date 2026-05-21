@@ -7,6 +7,7 @@ import { api } from "@/lib/api";
 import { setSessionCookie } from "@/app/actions";
 import { getFrontendDomain } from "@/lib/config";
 import { detectLocationConfig } from "@/lib/timezone-utils";
+import { trackEventOnce, trackCustomEventOnce } from "@/lib/meta-pixel";
 import { useOnboardingStore, type DraftService, type DraftResource } from "@/store/onboarding";
 import type { Tenant, Service, Resource } from "@/types/api";
 import { Btn } from "@/components/ui/btn";
@@ -85,6 +86,23 @@ function BusinessStep() {
   const { businessName, category, whatsapp, email, address, set } = useOnboardingStore();
   const inputBase = "w-full h-[48px] px-[14px] border border-line bg-surface rounded-sm text-[15px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent";
 
+  // Meta Pixel — handlers de onBlur. Disparan al "terminar de escribir"
+  // (foco fuera del input), no en cada keystroke.
+  const handleBusinessNameBlur = () => {
+    if (businessName.trim().length < 2) return;
+    trackEventOnce("meta_pixel_lead", "Lead", {
+      content_name: "onboarding_business_step",
+      content_category: "business_name",
+    });
+  };
+
+  const handleEmailBlur = () => {
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) return;
+    trackCustomEventOnce("meta_pixel_email_entered", "EmailEntered", {
+      content_name: "onboarding_business_step",
+    });
+  };
+
   return (
     <FadeIn>
       <h1 className="font-serif text-[30px] leading-[1.1] text-balance" style={{ letterSpacing: "-0.6px" }}>
@@ -103,6 +121,7 @@ function BusinessStep() {
             autoComplete="organization"
             value={businessName}
             onChange={(e) => set("businessName", e.target.value)}
+            onBlur={handleBusinessNameBlur}
             placeholder="Corte Moderno"
             className={inputBase}
             style={{ fontFamily: "inherit" }}
@@ -161,6 +180,7 @@ function BusinessStep() {
             name="email"
             value={email}
             onChange={(e) => set("email", e.target.value.trim())}
+            onBlur={handleEmailBlur}
             placeholder="dueno@negocio.com"
             type="email"
             inputMode="email"
@@ -199,6 +219,21 @@ function BusinessStep() {
 // 2 — Services
 function ServicesStep() {
   const { services, addService, updateService, removeService } = useOnboardingStore();
+
+  // Meta Pixel: ServicesConfigured (custom) — dispara cuando el dueño completa
+  // al menos un servicio con nombre + duración. Señal de que entendieron el wizard
+  // y avanzaron más allá del form básico.
+  const validServiceCount = services.filter(
+    (s) => s.name.trim().length >= 2 && s.duration_minutes > 0,
+  ).length;
+  useEffect(() => {
+    if (validServiceCount < 1) return;
+    trackCustomEventOnce("meta_pixel_services_configured", "ServicesConfigured", {
+      content_name: "onboarding_services_step",
+      num_services: validServiceCount,
+      has_prices: services.some((s) => s.price != null && s.price > 0),
+    });
+  }, [validServiceCount, services]);
 
   return (
     <FadeIn>
@@ -321,7 +356,7 @@ function ResourcesStep() {
         ¿Trabajás solo o en equipo?
       </h1>
       <p className="text-[14px] text-ink-2 mt-[8px]">
-        Un &quot;recurso&quot; es cada persona o silla que atiende turnos.
+        Cada persona que atiende turnos. Cambiá &quot;Yo&quot; por tu nombre.
       </p>
 
       <div className="mt-[24px] flex flex-col gap-[8px]">
@@ -654,6 +689,23 @@ export function OnboardingWizard() {
         currency: locationConfig.currency,
         locale: locationConfig.locale,
         is_public: true,
+      });
+
+      // Meta Pixel: CompleteRegistration + StartTrial (sólo en éxito real, una vez por tenant).
+      // StartTrial actúa como proxy de "Subscribe" mientras no exista la pasarela de pago:
+      // el tenant arranca con 30 clientes gratis, así que crear el tenant = iniciar trial.
+      const dedupeKey = `meta_pixel_complete_registration:${tenant.id}`;
+      trackEventOnce(dedupeKey, "CompleteRegistration", {
+        content_name: "onboarding_wizard",
+        value: 0,
+        currency: "ARS",
+      });
+      // Re-uso de la misma clave: el segundo trackEventOnce ve la key ya seteada
+      // y NO dispara. Necesitamos disparar StartTrial por su cuenta — uso otra key.
+      trackEventOnce(`meta_pixel_start_trial:${tenant.id}`, "StartTrial", {
+        content_name: "free_trial_30_clients",
+        predicted_ltv: 120000,
+        currency: "ARS",
       });
 
       // 2. Servicios

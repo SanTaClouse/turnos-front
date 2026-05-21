@@ -6,7 +6,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { usePushNotifications } from "@/lib/use-push-notifications";
 import { isAppointmentPast } from "@/lib/use-notifications-feed";
-import type { Appointment, AvailableSlot, Resource, Service } from "@/types/api";
+import type { Appointment, AvailableSlot, BlockedSlot, Resource, Service } from "@/types/api";
+import { expandFullDayBlocks } from "@/lib/blocked-dates";
 import { useAdminStore } from "@/store/admin";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
@@ -332,9 +333,10 @@ function NowLine() {
 }
 
 // ─── Week view ─────────────────────────────────────────────
-function WeekView({ weekDates, appointments, onDayClick }: {
+function WeekView({ weekDates, appointments, blockedDates, onDayClick }: {
   weekDates: string[];
   appointments: Appointment[];
+  blockedDates: Set<string>;
   onDayClick: (date: string) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
@@ -350,6 +352,7 @@ function WeekView({ weekDates, appointments, onDayClick }: {
     <div className="flex flex-col gap-[8px]">
       {weekDates.map((date, i) => {
         const isToday = date === today;
+        const isBlocked = blockedDates.has(date);
         const count = countByDate[date] ?? 0;
         const [, , d] = date.split("-").map(Number);
         return (
@@ -358,10 +361,15 @@ function WeekView({ weekDates, appointments, onDayClick }: {
             onClick={() => onDayClick(date)}
             className="press-fx flex items-center gap-[14px] px-[16px] py-[14px] rounded text-left w-full"
             style={{
-              background: isToday ? "var(--ink-1)" : "var(--surface)",
+              background: isToday
+                ? "var(--ink-1)"
+                : isBlocked
+                ? "var(--line-2)"
+                : "var(--surface)",
               color: isToday ? "var(--bg)" : "var(--ink-1)",
               border: `1px solid ${isToday ? "var(--ink-1)" : "var(--line)"}`,
               fontFamily: "inherit",
+              opacity: isBlocked && !isToday ? 0.7 : 1,
             }}
           >
             <div style={{ width: 44 }}>
@@ -369,7 +377,12 @@ function WeekView({ weekDates, appointments, onDayClick }: {
               <div className="font-serif text-[26px] leading-[1] mt-[2px]" style={{ letterSpacing: "-0.5px" }}>{d}</div>
             </div>
             <div className="flex-1">
-              {count === 0 ? (
+              {isBlocked ? (
+                <div className="text-[13px] flex items-center gap-[6px]" style={{ opacity: 0.75 }}>
+                  <Icon name="lock" size={12} color={isToday ? "rgba(255,255,255,0.7)" : "var(--ink-2)"} />
+                  Bloqueado
+                </div>
+              ) : count === 0 ? (
                 <div className="text-[13px] opacity-50">Cerrado</div>
               ) : (
                 <>
@@ -392,13 +405,14 @@ function WeekView({ weekDates, appointments, onDayClick }: {
 }
 
 // ─── Appointment detail sheet ──────────────────────────────
-function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNotesChange, loading }: {
+function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNotesChange, onPriceChange, loading }: {
   appt: Appointment | null;
   resources: Resource[];
   onClose: () => void;
   onConfirm: () => void;
   onCancel: (alsoBlockSlot: boolean) => void;
   onNotesChange: (notes: string) => void;
+  onPriceChange: (price: number | null) => void;
   loading?: boolean;
 }) {
   // sub-estado interno: cuando el admin aprieta "Cancelar turno" mostramos
@@ -508,6 +522,14 @@ function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNote
           <div className="flex items-center gap-[10px] mb-[16px] flex-wrap">
             <StatusPill status={appt.status as "pending" | "confirmed" | "cancelled"} />
             <SourcePill source={appt.source as "whatsapp" | "web" | "manual"} />
+            {appt.is_overbooking && (
+              <span
+                className="text-[10px] font-medium uppercase tracking-[0.05em] px-[8px] py-[3px] rounded-full"
+                style={{ background: "#fdece7", color: "#c45a3c" }}
+              >
+                Sobre-turno
+              </span>
+            )}
             <span className="font-mono text-[10px] text-ink-3 ml-auto">
               #{appt.id.slice(0, 8).toUpperCase()}
             </span>
@@ -572,6 +594,9 @@ function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNote
             )}
           </div>
 
+          {/* Precio */}
+          <PriceOverrideField appt={appt} onChange={onPriceChange} />
+
           {/* Notas */}
           <div className="label-mono my-[8px]">Notas</div>
           <textarea
@@ -611,6 +636,107 @@ function ApptDetailSheet({ appt, resources, onClose, onConfirm, onCancel, onNote
   );
 }
 
+// ─── Price override field (en el detalle) ──────────────────
+function PriceOverrideField({
+  appt,
+  onChange,
+}: {
+  appt: Appointment;
+  onChange: (price: number | null) => void;
+}) {
+  const servicePrice =
+    appt.service?.price == null
+      ? null
+      : typeof appt.service.price === "string"
+      ? parseFloat(appt.service.price)
+      : Number(appt.service.price);
+  const overrideRaw = appt.price_override;
+  const overrideNum =
+    overrideRaw == null
+      ? null
+      : typeof overrideRaw === "string"
+      ? parseFloat(overrideRaw)
+      : Number(overrideRaw);
+  const hasOverride = overrideNum != null && !Number.isNaN(overrideNum);
+
+  const [value, setValue] = useState<string>(
+    hasOverride
+      ? String(overrideNum)
+      : servicePrice != null
+      ? String(servicePrice)
+      : "",
+  );
+
+  // Re-sincronizar si cambia el turno seleccionado (mismo sheet, otro appt)
+  useEffect(() => {
+    setValue(
+      hasOverride
+        ? String(overrideNum)
+        : servicePrice != null
+        ? String(servicePrice)
+        : "",
+    );
+    // intencional: depende del id del turno
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appt.id]);
+
+  const commit = () => {
+    const trimmed = value.trim();
+    if (trimmed === "") {
+      // Vacío = volver al precio del servicio
+      if (hasOverride) onChange(null);
+      return;
+    }
+    const parsed = Number(trimmed);
+    if (Number.isNaN(parsed) || parsed < 0) return;
+    if (parsed === servicePrice) {
+      if (hasOverride) onChange(null);
+      return;
+    }
+    if (parsed !== overrideNum) onChange(parsed);
+  };
+
+  const resetToService = () => {
+    if (servicePrice != null) setValue(String(servicePrice));
+    if (hasOverride) onChange(null);
+  };
+
+  return (
+    <>
+      <div className="label-mono my-[8px] flex items-center justify-between">
+        <span>Precio cobrado</span>
+        {hasOverride && (
+          <button
+            onClick={resetToService}
+            className="text-[10px] text-ink-2 underline underline-offset-2"
+            style={{ background: "transparent", border: 0, cursor: "pointer", padding: 0 }}
+            type="button"
+          >
+            Volver al precio del servicio
+          </button>
+        )}
+      </div>
+      <div className="flex items-center gap-[8px]">
+        <input
+          type="number"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onBlur={commit}
+          placeholder={servicePrice != null ? String(servicePrice) : "0"}
+          className="w-full h-[40px] px-[12px] border border-line bg-surface rounded-sm text-[14px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent font-mono"
+          style={{ fontFamily: "inherit" }}
+        />
+        {hasOverride && servicePrice != null && (
+          <span className="text-[11px] text-ink-3 font-mono whitespace-nowrap">
+            base {servicePrice}
+          </span>
+        )}
+      </div>
+    </>
+  );
+}
+
 // ─── Create appointment sheet ──────────────────────────────
 function CreateApptSheet({ open, onClose, initialTime, services, resources, tenantId }: {
   open: boolean;
@@ -627,6 +753,13 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
   const [phone, setPhone] = useState("");
   const [name, setName] = useState("");
+  // Sobre-turno: deja al admin meter un turno fuera del slot grid normal.
+  // Cuando está prendido, mostramos un input libre de hora y no se valida
+  // contra availability.
+  const [isOverbook, setIsOverbook] = useState(false);
+  const [overbookTime, setOverbookTime] = useState<string>("");
+  // Precio override opcional. Vacío = usa precio del servicio.
+  const [priceOverride, setPriceOverride] = useState<string>("");
   const [loading, setLoading] = useState(false);
   const { selectedDate } = useAdminStore();
 
@@ -637,6 +770,9 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
       setName("");
       setSelectedResource("");
       setSelectedTime(null);
+      setIsOverbook(false);
+      setOverbookTime("");
+      setPriceOverride("");
     } else {
       // Cada vez que abrimos, arrancamos con la hora elegida (si vino) y el
       // resto en limpio.
@@ -666,13 +802,23 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
     if (!stillAvailable) setSelectedTime(null);
   }, [slots, selectedService, selectedTime, loadingSlots]);
 
+  const effectiveTime = isOverbook ? overbookTime : selectedTime;
   const canSubmit =
-    !!selectedService && !!selectedTime && phone.replace(/\D/g, "").length >= 8;
+    !!selectedService &&
+    !!effectiveTime &&
+    /^\d{2}:\d{2}$/.test(effectiveTime) &&
+    phone.replace(/\D/g, "").length >= 8;
 
   const handleCreate = async () => {
     if (!canSubmit) return;
     setLoading(true);
     try {
+      const parsedPrice = priceOverride.trim() === ""
+        ? undefined
+        : Number(priceOverride);
+      const priceOk =
+        parsedPrice === undefined ||
+        (Number.isFinite(parsedPrice) && parsedPrice >= 0);
       // Mandamos el teléfono tal cual lo tipeó el admin. El backend lo
       // normaliza a E.164 (+54 9 ...) y dedupea contra clientes existentes,
       // así si el cliente ya tiene email cargado, lo reutiliza para mandarle
@@ -682,10 +828,12 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
         service_id: selectedService!.id,
         resource_id: selectedResource || undefined,
         date: selectedDate,
-        time: selectedTime!,
+        time: effectiveTime!,
         client_phone: phone,
         client_name: name || "Cliente",
         source: "manual",
+        is_overbooking: isOverbook || undefined,
+        price_override: priceOk ? parsedPrice : undefined,
       });
       onClose();
     } catch {
@@ -735,7 +883,7 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
         <div>
           <div className="flex justify-between items-baseline mb-[6px]">
             <label className="text-[12px] font-medium text-ink-2">Horario</label>
-            {selectedTime && (
+            {!isOverbook && selectedTime && (
               <span className="font-mono text-[11px] text-ink-3">
                 {selectedTime}
               </span>
@@ -746,19 +894,28 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
               Elegí un servicio para ver los horarios disponibles.
             </div>
           )}
-          {selectedService && loadingSlots && (
+          {selectedService && isOverbook && (
+            <input
+              type="time"
+              value={overbookTime}
+              onChange={(e) => setOverbookTime(e.target.value)}
+              className="w-full h-[40px] px-[12px] border border-line bg-surface rounded-sm text-[14px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent font-mono"
+              style={{ fontFamily: "inherit" }}
+            />
+          )}
+          {selectedService && !isOverbook && loadingSlots && (
             <div className="flex gap-[6px]">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="h-[36px] w-[64px] rounded-[8px] bg-line-2 animate-pulse" />
               ))}
             </div>
           )}
-          {selectedService && !loadingSlots && slots.length === 0 && (
+          {selectedService && !isOverbook && !loadingSlots && slots.length === 0 && (
             <div className="text-[12px] text-ink-3 bg-surface border border-line rounded-sm px-[12px] py-[10px]">
-              No hay horarios disponibles para este servicio el {formatDate(selectedDate)}.
+              No hay horarios disponibles para este servicio el {formatDate(selectedDate)}. Activá "Sobre-turno" para forzar uno.
             </div>
           )}
-          {selectedService && !loadingSlots && slots.length > 0 && (
+          {selectedService && !isOverbook && !loadingSlots && slots.length > 0 && (
             <div className="flex flex-wrap gap-[6px] max-h-[160px] overflow-y-auto hide-scroll">
               {slots.map((s) => {
                 const active = s.slot === selectedTime;
@@ -782,6 +939,46 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
               })}
             </div>
           )}
+
+          {/* Toggle sobre-turno */}
+          <label
+            className="flex items-center gap-[8px] mt-[10px] cursor-pointer select-none"
+            style={{ fontFamily: "inherit" }}
+          >
+            <input
+              type="checkbox"
+              checked={isOverbook}
+              onChange={(e) => setIsOverbook(e.target.checked)}
+              className="cursor-pointer"
+            />
+            <span className="text-[12px] text-ink-2">
+              Sobre-turno (forzar hora fuera del horario normal)
+            </span>
+          </label>
+        </div>
+
+        {/* Precio (opcional) */}
+        <div>
+          <div className="flex justify-between items-baseline mb-[6px]">
+            <label className="text-[12px] font-medium text-ink-2">Precio cobrado</label>
+            <span className="label-mono">Opcional</span>
+          </div>
+          <input
+            type="number"
+            inputMode="decimal"
+            value={priceOverride}
+            onChange={(e) => setPriceOverride(e.target.value)}
+            placeholder={
+              selectedService?.price != null
+                ? `Default: ${selectedService.price}`
+                : "Sin precio fijado"
+            }
+            className="w-full h-[40px] px-[12px] border border-line bg-surface rounded-sm text-[14px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent font-mono"
+            style={{ fontFamily: "inherit" }}
+          />
+          <p className="text-[10.5px] text-ink-3 mt-[4px] leading-[1.3]">
+            Dejá vacío para usar el precio del servicio. Útil para descuentos puntuales o cobros distintos.
+          </p>
         </div>
 
         {/* Recurso */}
@@ -897,6 +1094,20 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
     refetchIntervalInBackground: false,
   });
 
+  const { data: blockedSlots = [] } = useQuery({
+    queryKey: ["blocked-slots", tenantId],
+    enabled: !!tenantId,
+    queryFn: () => api.get<BlockedSlot[]>(`/blocked-slots?tenantId=${tenantId}`),
+    // No hace falta polling fino: los bloqueos los crea el mismo admin.
+    refetchInterval: 60_000,
+    refetchIntervalInBackground: false,
+  });
+
+  const blockedDates = useMemo(
+    () => expandFullDayBlocks(blockedSlots),
+    [blockedSlots],
+  );
+
   const invalidateAppointments = () =>
     qc.invalidateQueries({ queryKey: ["appointments", tenantId] });
 
@@ -959,6 +1170,9 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
 
       setActionSuccess(alsoBlockSlot ? "Turno cancelado y horario bloqueado" : "Turno cancelado");
       await invalidateAppointments();
+      if (alsoBlockSlot) {
+        await qc.invalidateQueries({ queryKey: ["blocked-slots", tenantId] });
+      }
       setSelectedAppt(null);
       setTimeout(() => setActionSuccess(null), 3000);
     } catch {
@@ -973,6 +1187,16 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
     if (!selectedAppt) return;
     try {
       await api.patch(`/appointments/${selectedAppt.id}`, { notes });
+    } catch { /* silently */ }
+  };
+
+  const handlePriceChange = async (price: number | null) => {
+    if (!selectedAppt) return;
+    try {
+      await api.patch(`/appointments/${selectedAppt.id}`, {
+        price_override: price,
+      });
+      await invalidateAppointments();
     } catch { /* silently */ }
   };
 
@@ -1103,6 +1327,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
           <WeekView
             weekDates={weekDates}
             appointments={appointments}
+            blockedDates={blockedDates}
             onDayClick={(date) => { setDate(date); setViewMode("day"); }}
           />
         )}
@@ -1119,6 +1344,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
         onConfirm={handleConfirm}
         onCancel={handleCancel}
         onNotesChange={handleNotesChange}
+        onPriceChange={handlePriceChange}
         loading={actionLoading}
       />
 

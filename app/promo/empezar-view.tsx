@@ -7,6 +7,16 @@ import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { ResourceAvatar } from "@/components/ui/resource-avatar";
+import { ViewContentTracker } from "@/components/providers/ViewContentTracker";
+import { trackEventOnce } from "@/lib/meta-pixel";
+
+const trackStartOnboarding = (ctaPosition: "hero" | "mid" | "final") => {
+  // Una sola vez por sesión, independiente del CTA clickeado — la intención es la misma.
+  trackEventOnce("meta_pixel_initiate_checkout", "InitiateCheckout", {
+    content_name: "promo_to_onboarding",
+    cta_position: ctaPosition,
+  });
+};
 
 // ════════════════════════════════════════════════════════════
 // LANDING /empezar — pensada para bio de Instagram
@@ -19,6 +29,7 @@ export function EmpezarView() {
       className="min-h-screen bg-bg"
       style={{ maxWidth: 430, margin: "0 auto" }}
     >
+      <ViewContentTracker content_name="promo" content_category="sales_landing" />
       <PromoBar />
 
       <main className="px-[20px] pb-[120px]">
@@ -205,7 +216,7 @@ function Hero() {
       </p>
 
       <div className="mt-[24px] flex flex-col gap-[10px]">
-        <Link href="/onboarding" className="w-full">
+        <Link href="/onboarding" className="w-full" onClick={() => trackStartOnboarding("hero")}>
           <Btn variant="primary" size="lg" full className="gap-2">
             Crear mi negocio gratis
             <Icon name="forward" size={16} color="var(--bg)" />
@@ -800,7 +811,7 @@ function Pricing() {
           ))}
         </div>
 
-        <Link href="/onboarding" className="block mt-[20px]">
+        <Link href="/onboarding" className="block mt-[20px]" onClick={() => trackStartOnboarding("mid")}>
           <button
             className="w-full h-[48px] rounded text-[14px] font-semibold flex items-center justify-center gap-[6px] press-fx"
             style={{
@@ -933,7 +944,7 @@ function FinalCTA() {
       </p>
 
       <div className="mt-[28px]">
-        <Link href="/onboarding">
+        <Link href="/onboarding" onClick={() => trackStartOnboarding("final")}>
           <Btn variant="primary" size="lg" full className="gap-2">
             Crear mi negocio
             <Icon name="forward" size={16} color="var(--bg)" />

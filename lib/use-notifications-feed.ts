@@ -26,14 +26,17 @@ export function isAppointmentPast(
 /**
  * Feed unificado de notificaciones para el admin.
  *
- * - Hace polling al endpoint /appointments/recent en background (30s) para
- *   que el badge de la campana refleje actividad nueva sin tener que abrir
- *   el dropdown.
+ * - El canal **instantáneo** son las Web Push notifications (el listener
+ *   `appointment.created` del backend dispara el push apenas se crea el
+ *   turno). El polling de acá es **fallback** para casos donde push no
+ *   entrega: Safari iOS fuera de PWA, browsers con permiso denegado,
+ *   conexión flaky, etc.
+ * - Por eso lo bajamos a 120s: con push activo, el badge se actualiza
+ *   solo via invalidación (`confirmMutation.onSuccess` y al abrir el
+ *   dropdown). El polling cada 2 min cubre el peor caso de delay sin
+ *   sobrecargar el backend.
  * - "Nueva" = creada después del último `markAllSeen()` (persistido en
- *   localStorage por tenant), no cancelada y todavía no vencida. Así el
- *   número del badge representa cosas que el admin realmente puede accionar.
- * - Expone la mutation de confirmación para que el dropdown la consuma sin
- *   duplicar lógica.
+ *   localStorage por tenant), no cancelada y todavía no vencida.
  */
 export function useNotificationsFeed(
   tenantId: string,
@@ -61,9 +64,11 @@ export function useNotificationsFeed(
         `/appointments/recent?tenantId=${tenantId}&limit=20`,
       ),
     enabled,
-    refetchInterval: 30_000,
+    // Polling de fallback (push es el canal instantáneo, ver doc arriba).
+    refetchInterval: 120_000,
     refetchIntervalInBackground: false,
-    staleTime: 5_000,
+    // 60s evita refetches al cambiar entre pantallas del admin.
+    staleTime: 60_000,
   });
 
   const recent = useMemo(() => query.data ?? [], [query.data]);

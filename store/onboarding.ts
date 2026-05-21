@@ -71,7 +71,11 @@ const initial = {
   resources: [{ name: "Yo", role: "", hue: 24 }] as DraftResource[],
   openHour: "10:00",
   closeHour: "20:00",
-  workdays: [1, 2, 3, 4, 5],
+  // Default típico Argentina: martes a sábado. La mayoría de barberías /
+  // peluquerías (rubro default) no abren lunes y sí sábados. Domingo
+  // tampoco abre la mayoría, así que queda fuera. El usuario igual puede
+  // tocar el toggle de cada día.
+  workdays: [2, 3, 4, 5, 6],
   slug: "",
   createdTenantId: null,
 };
