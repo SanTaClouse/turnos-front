@@ -3,9 +3,40 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { LogOut, Users } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
 import { setTenantBillingAction, logoutPlatformAction } from "./actions";
 import type { PlatformTenantRow } from "@/types/api";
+
+/**
+ * Toggle propio con los tokens del proyecto (accent/line). No usamos el Switch
+ * de components/ui porque depende de colores de shadcn que no están definidos
+ * en globals.css y queda invisible.
+ */
+function Toggle({
+  checked,
+  disabled,
+  onChange,
+}: {
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="relative inline-flex w-[46px] h-[28px] rounded-full transition-colors disabled:opacity-40 flex-shrink-0"
+      style={{ backgroundColor: checked ? "var(--accent)" : "var(--line-2)" }}
+    >
+      <span
+        className="absolute top-[3px] w-[22px] h-[22px] rounded-full bg-white shadow transition-all"
+        style={{ left: checked ? "21px" : "3px" }}
+      />
+    </button>
+  );
+}
 
 const PLAN_LABEL: Record<PlatformTenantRow["plan_status"], string> = {
   free: "Gratis",
@@ -168,10 +199,10 @@ export function PlatformView({ tenants }: { tenants: PlatformTenantRow[] }) {
                     No paga ni ve el bloqueo
                   </p>
                 </div>
-                <Switch
+                <Toggle
                   checked={t.billing_exempt}
                   disabled={pending && busyId === t.id}
-                  onCheckedChange={(v: boolean) => toggleExempt(t, v)}
+                  onChange={(v) => toggleExempt(t, v)}
                 />
               </div>
             </div>
