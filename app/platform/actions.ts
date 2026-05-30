@@ -38,12 +38,17 @@ export async function logoutPlatformAction(): Promise<void> {
 export async function getPlatformTenants(): Promise<PlatformTenantRow[] | null> {
   const key = cookies().get(COOKIE)?.value;
   if (!key) return null;
-  const res = await fetch(`${BACKEND_URL}/platform/tenants`, {
-    headers: { "x-admin-key": key },
-    cache: "no-store",
-  });
-  if (!res.ok) return null;
-  return (await res.json()) as PlatformTenantRow[];
+  try {
+    const res = await fetch(`${BACKEND_URL}/platform/tenants`, {
+      headers: { "x-admin-key": key },
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as PlatformTenantRow[];
+  } catch {
+    // Backend caído/timeout: no reventamos el render, mostramos el login.
+    return null;
+  }
 }
 
 /** Cambia exención de cobro y/o cupo gratis de un tenant. */
