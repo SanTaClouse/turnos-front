@@ -1,13 +1,24 @@
 import { BottomNav } from "@/components/admin/bottom-nav";
+import { BillingGate } from "@/components/admin/billing-gate";
+import { getBillingStatus } from "@/lib/billing";
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  // Estado de facturación server-side: misma verdad para todos los dispositivos.
+  const billing = await getBillingStatus();
+
   return (
     <div
       className="flex flex-col bg-bg"
       style={{ height: "100dvh", maxWidth: 430, margin: "0 auto", position: "relative" }}
     >
-      <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
-      <BottomNav />
+      <BillingGate status={billing}>
+        <div className="flex-1 flex flex-col overflow-hidden">{children}</div>
+        <BottomNav />
+      </BillingGate>
     </div>
   );
 }

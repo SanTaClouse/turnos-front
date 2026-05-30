@@ -83,6 +83,49 @@ export async function verifyLoginCodeAction(email: string, code: string) {
 }
 
 /**
+ * Lee el estado de facturación actual. Lo usa la página de éxito para hacer
+ * polling hasta que el webhook de MP marque la suscripción como activa.
+ */
+export async function getBillingStatusAction(): Promise<{
+  plan_status: string;
+  requires_payment: boolean;
+} | null> {
+  const token = getSessionToken();
+  if (!token) return null;
+  const res = await fetch(`${BACKEND_URL}/me/billing`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as {
+    plan_status: string;
+    requires_payment: boolean;
+  };
+  return { plan_status: data.plan_status, requires_payment: data.requires_payment };
+}
+
+/**
+ * Crea la suscripción en Mercado Pago y devuelve el init_point al que hay que
+ * redirigir al dueño para autorizar el débito mensual automático.
+ */
+export async function createSubscriptionAction(): Promise<{
+  init_point: string;
+}> {
+  const token = getSessionToken();
+  if (!token) throw new Error("Sin sesión activa");
+  const res = await fetch(`${BACKEND_URL}/me/billing/subscribe`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(err.message ?? "No se pudo iniciar la suscripción");
+  }
+  return (await res.json()) as { init_point: string };
+}
+
+/**
  * Revoca una sesión específica (panel de dispositivos).
  */
 export async function revokeSessionAction(sessionId: string) {

@@ -40,6 +40,34 @@ export interface AdminMe {
   session: AdminSession;
 }
 
+export interface BillingStatus {
+  plan_status: "free" | "active" | "past_due" | "cancelled";
+  billing_exempt: boolean;
+  client_count: number;
+  free_client_limit: number;
+  /** true → bloqueo duro: modal que tapa el panel hasta suscribirse */
+  requires_payment: boolean;
+  /** true → período de gracia: banner no bloqueante con botón de pago */
+  in_grace: boolean;
+  grace_until: string | null;
+  current_period_end: string | null;
+  amount: number;
+  currency: string;
+}
+
+export interface PlatformTenantRow {
+  id: string;
+  name: string;
+  slug: string;
+  email: string | null;
+  plan_status: "free" | "active" | "past_due" | "cancelled";
+  billing_exempt: boolean;
+  free_client_limit: number;
+  client_count: number;
+  grace_until: string | null;
+  current_period_end: string | null;
+}
+
 export interface Service {
   id: string;
   name: string;
