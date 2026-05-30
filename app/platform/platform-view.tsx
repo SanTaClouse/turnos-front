@@ -25,12 +25,34 @@ export function PlatformView({ tenants }: { tenants: PlatformTenantRow[] }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Valor del input de cupo por tenant (string para permitir edición libre).
+  const [limitDraft, setLimitDraft] = useState<Record<string, string>>({});
 
   function toggleExempt(t: PlatformTenantRow, exempt: boolean) {
     setBusyId(t.id);
     startTransition(async () => {
       try {
         await setTenantBillingAction(t.id, { billing_exempt: exempt });
+        router.refresh();
+      } finally {
+        setBusyId(null);
+      }
+    });
+  }
+
+  function saveLimit(t: PlatformTenantRow) {
+    const raw = limitDraft[t.id];
+    const value = parseInt(raw ?? "", 10);
+    if (Number.isNaN(value) || value < 0) return;
+    setBusyId(t.id);
+    startTransition(async () => {
+      try {
+        await setTenantBillingAction(t.id, { free_client_limit: value });
+        setLimitDraft((d) => {
+          const next = { ...d };
+          delete next[t.id];
+          return next;
+        });
         router.refresh();
       } finally {
         setBusyId(null);
@@ -104,6 +126,40 @@ export function PlatformView({ tenants }: { tenants: PlatformTenantRow[] }) {
               </div>
 
               <div className="flex items-center justify-between mt-[14px] pt-[12px] border-t border-line">
+                <div>
+                  <p className="text-[13px] font-medium text-ink-1">
+                    Cupo gratis
+                  </p>
+                  <p className="text-[11px] text-ink-2">
+                    Clientes antes de cobrar
+                  </p>
+                </div>
+                <div className="flex items-center gap-[8px]">
+                  <input
+                    type="number"
+                    min={0}
+                    inputMode="numeric"
+                    value={limitDraft[t.id] ?? String(t.free_client_limit)}
+                    onChange={(e) =>
+                      setLimitDraft((d) => ({ ...d, [t.id]: e.target.value }))
+                    }
+                    className="w-[64px] h-[36px] rounded border border-line bg-bg px-[10px] text-[14px] text-ink-1 text-center outline-none focus:border-ink-1"
+                  />
+                  <button
+                    onClick={() => saveLimit(t)}
+                    disabled={
+                      (pending && busyId === t.id) ||
+                      limitDraft[t.id] === undefined ||
+                      limitDraft[t.id] === String(t.free_client_limit)
+                    }
+                    className="h-[36px] px-[14px] rounded bg-ink-1 text-bg text-[13px] font-medium disabled:opacity-30"
+                  >
+                    Guardar
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between mt-[12px] pt-[12px] border-t border-line">
                 <div>
                   <p className="text-[13px] font-medium text-ink-1">
                     Gratis siempre
