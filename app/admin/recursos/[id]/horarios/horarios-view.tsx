@@ -111,6 +111,11 @@ export function HorariosView({
   const [schedule, setSchedule] = useState<DaySchedule[]>(() =>
     buildInitialSchedule(initialAvailabilities),
   );
+  // Intervalo entre turnos (granularidad de la grilla). Se inicializa desde la
+  // primera regla existente; si el recurso no tiene horarios cargados, 30 min.
+  const [slotDuration, setSlotDuration] = useState<number>(
+    () => initialAvailabilities[0]?.slot_duration ?? 30,
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
@@ -182,7 +187,7 @@ export function HorariosView({
             day_of_week: day.dayOfWeek,
             start_time: r.from,
             end_time: r.to,
-            slot_duration: 30,
+            slot_duration: slotDuration,
           });
         }
       }
@@ -218,6 +223,44 @@ export function HorariosView({
       </div>
 
       <div className="flex-1 overflow-y-auto hide-scroll px-[20px] pt-[8px] pb-[120px]">
+        {/* Intervalo entre turnos: granularidad con la que se ofrecen los
+            horarios. La duración real del servicio puede ocupar varios. */}
+        <div
+          className="rounded px-[14px] py-[12px] mb-[12px]"
+          style={{ background: "var(--surface)", border: "1px solid var(--line)" }}
+        >
+          <div className="flex items-center justify-between gap-[10px]">
+            <div className="min-w-0">
+              <div className="text-[14px] font-medium text-ink-1">Intervalo entre turnos</div>
+              <div className="text-[11px] text-ink-3 mt-[2px]">
+                Cada cuánto se ofrecen horarios para reservar
+              </div>
+            </div>
+            <div className="flex gap-[4px] flex-shrink-0">
+              {[15, 30, 60].map((min) => (
+                <button
+                  key={min}
+                  onClick={() => setSlotDuration(min)}
+                  className="press-fx text-[12px] font-medium"
+                  style={{
+                    minWidth: 44,
+                    height: 32,
+                    borderRadius: 8,
+                    cursor: "pointer",
+                    border: "1px solid var(--line)",
+                    background: slotDuration === min ? "var(--ink-1)" : "transparent",
+                    color: slotDuration === min ? "var(--bg)" : "var(--ink-2)",
+                    transition: "background 0.15s, color 0.15s",
+                  }}
+                  aria-pressed={slotDuration === min}
+                >
+                  {min}m
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="flex flex-col gap-[6px]">
           {schedule.map((day, i) => (
             <div
