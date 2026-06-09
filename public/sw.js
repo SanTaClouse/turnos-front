@@ -75,6 +75,9 @@ self.addEventListener("fetch", (event) => {
 // Push notifications: el backend envía webpush.sendNotification() con
 // payload JSON {title, body, icon, badge, tag, data}. Sin este handler,
 // el navegador recibe el mensaje pero no muestra nada al admin.
+// En iOS Notification.maxActions es 0 — los action buttons no se muestran.
+const supportsActions = (Notification.maxActions ?? 1) > 0;
+
 self.addEventListener("push", (event) => {
   let payload = {};
   try {
@@ -85,16 +88,20 @@ self.addEventListener("push", (event) => {
 
   const title = payload.title || "Turno1Min";
   const data = payload.data || {};
+  const hasAppointment = !!(data.appointmentId && data.apiBase);
 
-  // Botón "Confirmar" directo en la notif. Solo lo mostramos en notifs de
-  // turno nuevo (las que traen appointmentId + apiBase para poder confirmar).
-  const actions =
-    data.appointmentId && data.apiBase
-      ? [{ action: "confirm", title: "✓ Confirmar turno" }]
-      : [];
+  const actions = hasAppointment && supportsActions
+    ? [{ action: "confirm", title: "✓ Confirmar turno" }]
+    : [];
+
+  // En iOS no hay botones: avisamos que el tap confirma directamente.
+  let body = payload.body || "";
+  if (hasAppointment && !supportsActions) {
+    body = body ? `${body} — Toca para confirmar` : "Toca para confirmar";
+  }
 
   const options = {
-    body: payload.body || "",
+    body,
     icon: payload.icon || "/icon-192.png",
     badge: payload.badge || "/badge.png",
     tag: payload.tag || "turno1min-notification",
@@ -117,15 +124,19 @@ async function confirmAppointment(data) {
     );
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
+    const hasWa = !!data.waUrl;
+    // En iOS no hay botones: avisamos que el tap abre WhatsApp.
+    const waBody = supportsActions
+      ? "Se envió el correo de confirmación. ¿Querés avisarle por WhatsApp?"
+      : "Se envió el correo de confirmación. Toca para enviar WhatsApp";
+
     await self.registration.showNotification("Turno confirmado ✓", {
-      body: data.waUrl
-        ? "Se envió el correo de confirmación. ¿Querés avisarle por WhatsApp?"
-        : "Se envió el correo de confirmación al cliente.",
+      body: hasWa ? waBody : "Se envió el correo de confirmación al cliente.",
       icon: "/icon-192.png",
       badge: "/badge.png",
       tag: `${data.appointmentId}-confirmed`,
       data: { waUrl: data.waUrl },
-      actions: data.waUrl
+      actions: hasWa && supportsActions
         ? [{ action: "whatsapp", title: "Enviar WhatsApp" }]
         : [],
     });
@@ -161,18 +172,28 @@ self.addEventListener("notificationclick", (event) => {
   const data = event.notification.data || {};
   event.notification.close();
 
-  // Botón "Confirmar turno"
+  // Botón "Confirmar turno" (desktop/Android)
   if (event.action === "confirm") {
     event.waitUntil(confirmAppointment(data));
     return;
   }
 
-  // Botón "Enviar WhatsApp" (en la notif de turno confirmado)
+  // Botón "Enviar WhatsApp" (desktop/Android, en la notif de turno confirmado)
   if (event.action === "whatsapp" && data.waUrl) {
     event.waitUntil(openUrl(data.waUrl));
     return;
   }
 
-  // Click en el cuerpo de la notif → abrir agenda (o la url que traiga).
+  // Sin action = tap en el cuerpo (siempre en iOS, a veces en otros).
+  // Si tiene appointmentId → confirmar; si tiene waUrl → abrir WhatsApp;
+  // si no → abrir agenda.
+  if (data.appointmentId && data.apiBase) {
+    event.waitUntil(confirmAppointment(data));
+    return;
+  }
+  if (data.waUrl) {
+    event.waitUntil(openUrl(data.waUrl));
+    return;
+  }
   event.waitUntil(openUrl(data.url || "/admin/agenda"));
 });
