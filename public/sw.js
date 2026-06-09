@@ -1,4 +1,4 @@
-// SW v3:
+// SW v4:
 //  - Cachea SOLO assets estáticos same-origin (iconos, fuentes, _next/static/).
 //  - NO toca peticiones a la API (cross-origin) ni documentos HTML — esas
 //    van directo a la red. Esto evita el bug del v2 que servía respuestas
@@ -75,8 +75,16 @@ self.addEventListener("fetch", (event) => {
 // Push notifications: el backend envía webpush.sendNotification() con
 // payload JSON {title, body, icon, badge, tag, data}. Sin este handler,
 // el navegador recibe el mensaje pero no muestra nada al admin.
-// En iOS Notification.maxActions es 0 — los action buttons no se muestran.
-const supportsActions = (Notification.maxActions ?? 1) > 0;
+// Detecta si la plataforma soporta action buttons en notificaciones.
+// En iOS, Notification.maxActions es undefined o 0 → false.
+// Usamos try/catch por si acaso el contexto SW no tiene Notification.
+let supportsActions = false;
+try {
+  supportsActions =
+    typeof Notification !== "undefined" &&
+    typeof Notification.maxActions === "number" &&
+    Notification.maxActions > 0;
+} catch { /* supportsActions queda false — sin botones → tap confirma */ }
 
 self.addEventListener("push", (event) => {
   let payload = {};
@@ -184,11 +192,19 @@ self.addEventListener("notificationclick", (event) => {
     return;
   }
 
-  // Sin action = tap en el cuerpo (siempre en iOS, a veces en otros).
-  // Si tiene appointmentId → confirmar; si tiene waUrl → abrir WhatsApp;
-  // si no → abrir agenda.
-  if (data.appointmentId && data.apiBase) {
-    event.waitUntil(confirmAppointment(data));
+  // Sin action = tap en el cuerpo (siempre en iOS).
+  // Navegamos a la agenda con query params: la página hace el PATCH desde React,
+  // que es más fiable que un fetch desde el SW en iOS.
+  // Fallback de appointmentId: el tag del backend ya es el appointmentId UUID.
+  const appointmentId = data.appointmentId ||
+    (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(event.notification.tag)
+      ? event.notification.tag
+      : null);
+
+  if (appointmentId) {
+    const params = new URLSearchParams({ confirm: appointmentId });
+    if (data.waUrl) params.set("wa", data.waUrl);
+    event.waitUntil(openUrl(`/admin/agenda?${params}`));
     return;
   }
   if (data.waUrl) {

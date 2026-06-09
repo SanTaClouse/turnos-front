@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
@@ -1048,10 +1049,33 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
   const [createTime, setCreateTime] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  // Banner que aparece después de confirmar desde notificación push (iOS tap)
+  const [pushToast, setPushToast] = useState<{ waUrl?: string } | null>(null);
 
   // Push notifications
   const { isSubscribed, requestPermission } = usePushNotifications(tenantId);
   const qc = useQueryClient();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  // Auto-confirmar cuando la notificación push de iOS navega a ?confirm=ID&wa=URL
+  const confirmIdOnMount = useRef(searchParams.get("confirm"));
+  const waUrlOnMount = useRef(searchParams.get("wa") ?? undefined);
+  useEffect(() => {
+    const confirmId = confirmIdOnMount.current;
+    if (!confirmId) return;
+    router.replace("/admin/agenda");
+    api.patch(`/appointments/${confirmId}/confirm`, {})
+      .then(() => {
+        qc.invalidateQueries({ queryKey: ["appointments", tenantId] });
+        setPushToast({ waUrl: waUrlOnMount.current });
+        setTimeout(() => setPushToast(null), 8000);
+      })
+      .catch(() => {
+        setActionSuccess("Error al confirmar el turno");
+        setTimeout(() => setActionSuccess(null), 3000);
+      });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const today = new Date().toISOString().slice(0, 10);
   const isToday = selectedDate === today;
@@ -1357,6 +1381,32 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
         resources={resources}
         tenantId={tenantId}
       />
+
+      {/* Toast de confirmación por tap de notificación push (iOS) */}
+      {pushToast && (
+        <motion.div
+          initial={{ opacity: 0, y: 24 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: 24 }}
+          className="fixed bottom-[24px] left-[16px] right-[16px] z-50 rounded-[12px] px-[16px] py-[14px] flex items-center gap-[12px]"
+          style={{ background: "var(--ink-1)", color: "var(--bg)" }}
+        >
+          <Icon name="check" size={18} color="var(--bg)" />
+          <span className="flex-1 text-[13px] font-medium">Turno confirmado</span>
+          {pushToast.waUrl && (
+            <a
+              href={pushToast.waUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[13px] font-semibold underline"
+              style={{ color: "var(--bg)" }}
+            >
+              WhatsApp
+            </a>
+          )}
+          <button onClick={() => setPushToast(null)} style={{ opacity: 0.6, background: "none", border: 0, cursor: "pointer", color: "var(--bg)" }}>✕</button>
+        </motion.div>
+      )}
     </>
   );
 }
