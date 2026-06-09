@@ -1,6 +1,10 @@
 import { ImageResponse } from "next/og";
 import { loadInstrumentSerif } from "@/lib/og-fonts";
 
+// Runtime edge: `@vercel/og` está hecho para edge. En Node, el prerender
+// estático del build rompe con "TypeError: Invalid URL" en fileURLToPath
+// (al cargar el wasm de resvg). En edge ese path no se ejecuta.
+export const runtime = "edge";
 export const alt = "Turno1Min · Tu agenda en 1 minuto";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
