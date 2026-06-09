@@ -1,6 +1,23 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 
+/**
+ * Convierte la VAPID public key (base64url) a Uint8Array.
+ *
+ * IMPORTANTE: pasar la key como string crudo a pushManager.subscribe()
+ * funciona en Chrome desktop pero FALLA en varios Android con
+ * "InvalidAccessError: applicationServerKey is not valid". El array de bytes
+ * es el formato que funciona en todos lados.
+ */
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(base64);
+  const output = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) output[i] = raw.charCodeAt(i);
+  return output;
+}
+
 export function usePushNotifications(tenantId: string | null) {
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -38,32 +55,57 @@ export function usePushNotifications(tenantId: string | null) {
   }, [tenantId]);
 
   const requestPermission = async () => {
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      console.log("Push notifications not supported");
+    // Soporte: en navegadores embebidos (WhatsApp/Instagram) y en iOS sin
+    // "Agregar a pantalla de inicio", PushManager no existe. Avisamos en vez
+    // de fallar mudo, así el usuario sabe qué hacer.
+    if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+      alert(
+        "Tu navegador no soporta notificaciones acá. Abrí el sitio en Chrome (no desde WhatsApp/Instagram) e instalá la app desde el menú ⋮ → Instalar aplicación.",
+      );
       return false;
     }
 
     if (!tenantId) return false;
 
+    const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    if (!vapidKey) {
+      // Falta la variable en el build de producción → nadie puede suscribirse.
+      console.error("NEXT_PUBLIC_VAPID_PUBLIC_KEY no está definida en el build");
+      alert("Las notificaciones no están configuradas en el servidor. Avisale al soporte.");
+      return false;
+    }
+
     try {
       const permission = await Notification.requestPermission();
       setPermission(permission);
 
-      if (permission === "granted") {
-        const registration = await navigator.serviceWorker.ready;
-        const subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY,
-        });
-
-        // Guardar en backend
-        await savePushSubscription(tenantId, subscription);
-        setIsSubscribed(true);
-        return true;
+      if (permission === "denied") {
+        // El usuario (o un "bloquear" previo) dejó el permiso denegado. El
+        // prompt ya no vuelve a aparecer hasta que lo resetee a mano.
+        alert(
+          "Las notificaciones están bloqueadas para este sitio. Tocá el candado 🔒 junto a la dirección → Notificaciones → Permitir, y volvé a intentar.",
+        );
+        return false;
       }
-      return false;
+
+      if (permission !== "granted") {
+        // "default": cerró el prompt sin elegir. Sin alert, puede reintentar.
+        return false;
+      }
+
+      const registration = await navigator.serviceWorker.ready;
+      const subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+      });
+
+      // Guardar en backend
+      await savePushSubscription(tenantId, subscription);
+      setIsSubscribed(true);
+      return true;
     } catch (error) {
       console.error("Error requesting notification permission:", error);
+      alert("No se pudieron activar las notificaciones. Probá cerrar y reabrir la app, o instalarla desde Chrome.");
       return false;
     }
   };
