@@ -6,7 +6,7 @@
 //  - Mantiene los handlers de push / notificationclick para que el admin
 //    reciba notificaciones cuando se crea un turno.
 
-const CACHE_NAME = "turno1min-v3";
+const CACHE_NAME = "turno1min-v4";
 const PRECACHE_URLS = ["/manifest.json"];
 
 self.addEventListener("install", (event) => {
@@ -84,12 +84,22 @@ self.addEventListener("push", (event) => {
   }
 
   const title = payload.title || "Turno1Min";
+  const data = payload.data || {};
+
+  // Botón "Confirmar" directo en la notif. Solo lo mostramos en notifs de
+  // turno nuevo (las que traen appointmentId + apiBase para poder confirmar).
+  const actions =
+    data.appointmentId && data.apiBase
+      ? [{ action: "confirm", title: "✓ Confirmar turno" }]
+      : [];
+
   const options = {
     body: payload.body || "",
     icon: payload.icon || "/icon-192.png",
-    badge: payload.badge || "/icon-192.png",
+    badge: payload.badge || "/badge.png",
     tag: payload.tag || "turno1min-notification",
-    data: payload.data || {},
+    data,
+    actions,
     requireInteraction: true,
     renotify: true,
   };
@@ -97,22 +107,72 @@ self.addEventListener("push", (event) => {
   event.waitUntil(self.registration.showNotification(title, options));
 });
 
-// Al hacer click en la notif, abrir/focusear la agenda del admin.
-self.addEventListener("notificationclick", (event) => {
-  event.notification.close();
-  const targetUrl = "/admin/agenda";
+// Confirma el turno llamando al backend (endpoint público, no necesita sesión)
+// y, si sale bien, muestra una segunda notif con el botón "Enviar WhatsApp".
+async function confirmAppointment(data) {
+  try {
+    const res = await fetch(
+      `${data.apiBase}/appointments/${data.appointmentId}/confirm`,
+      { method: "PATCH" },
+    );
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-  event.waitUntil(
-    self.clients
-      .matchAll({ type: "window", includeUncontrolled: true })
-      .then((windowClients) => {
-        const adminWin = windowClients.find((w) => w.url.includes("/admin"));
-        if (adminWin) {
-          return adminWin.focus();
-        }
-        if (self.clients.openWindow) {
-          return self.clients.openWindow(targetUrl);
-        }
-      }),
-  );
+    await self.registration.showNotification("Turno confirmado ✓", {
+      body: data.waUrl
+        ? "Se envió el correo de confirmación. ¿Querés avisarle por WhatsApp?"
+        : "Se envió el correo de confirmación al cliente.",
+      icon: "/icon-192.png",
+      badge: "/badge.png",
+      tag: `${data.appointmentId}-confirmed`,
+      data: { waUrl: data.waUrl },
+      actions: data.waUrl
+        ? [{ action: "whatsapp", title: "Enviar WhatsApp" }]
+        : [],
+    });
+  } catch (err) {
+    await self.registration.showNotification("No se pudo confirmar", {
+      body: "Probá de nuevo desde la agenda.",
+      icon: "/icon-192.png",
+      badge: "/badge.png",
+      tag: `${data.appointmentId}-confirm-error`,
+      data: { url: "/admin/agenda" },
+    });
+  }
+}
+
+// Abre una URL (interna del admin o externa como wa.me), reusando la ventana
+// del admin si ya está abierta.
+async function openUrl(targetUrl) {
+  if (/^https?:\/\//.test(targetUrl)) {
+    // URL externa (WhatsApp) — siempre ventana nueva.
+    if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+    return;
+  }
+  const windowClients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true,
+  });
+  const adminWin = windowClients.find((w) => w.url.includes("/admin"));
+  if (adminWin) return adminWin.focus();
+  if (self.clients.openWindow) return self.clients.openWindow(targetUrl);
+}
+
+self.addEventListener("notificationclick", (event) => {
+  const data = event.notification.data || {};
+  event.notification.close();
+
+  // Botón "Confirmar turno"
+  if (event.action === "confirm") {
+    event.waitUntil(confirmAppointment(data));
+    return;
+  }
+
+  // Botón "Enviar WhatsApp" (en la notif de turno confirmado)
+  if (event.action === "whatsapp" && data.waUrl) {
+    event.waitUntil(openUrl(data.waUrl));
+    return;
+  }
+
+  // Click en el cuerpo de la notif → abrir agenda (o la url que traiga).
+  event.waitUntil(openUrl(data.url || "/admin/agenda"));
 });
