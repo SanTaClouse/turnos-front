@@ -383,7 +383,7 @@ function WeekView({ weekDates, appointments, blockedDates, onDayClick }: {
                   Bloqueado
                 </div>
               ) : count === 0 ? (
-                <div className="text-[13px] opacity-50">Cerrado</div>
+                <div className="text-[13px] opacity-50">Sin turnos</div>
               ) : (
                 <>
                   <div className="text-[14px] font-medium">{count} turno{count !== 1 ? "s" : ""}</div>
