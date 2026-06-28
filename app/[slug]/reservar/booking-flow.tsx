@@ -626,7 +626,13 @@ export function BookingFlow({ tenant, services, resources, availableDaysOfWeek, 
         source: "web",
       });
       store.confirm(appt.id, tenant.name, tenant.address, initials, countryCode);
-      router.push(`/${tenant.slug}/reservar/ok`);
+      // Si el negocio cobra seña, pasamos por el paso de pago antes del ticket.
+      const hasDeposit = !!tenant.deposit_mode && tenant.deposit_mode !== "none";
+      router.push(
+        hasDeposit
+          ? `/${tenant.slug}/reservar/pago`
+          : `/${tenant.slug}/reservar/ok`,
+      );
       // Importante: NO reseteamos `submitting` acá. Mantener el botón en
       // estado de carga durante la transición evita que el Review parpadee
       // de vuelta a "Confirmar reserva" antes de que monte /ok. El

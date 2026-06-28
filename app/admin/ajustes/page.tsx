@@ -1,6 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { api } from "@/lib/api";
 import { getSession, getSessionToken } from "@/lib/session";
+import { getPaymentSettingsAction } from "@/app/actions";
 import type { Tenant, AdminSession } from "@/types/api";
 import { AjustesView } from "./ajustes-view";
 
@@ -30,13 +31,17 @@ export default async function AjustesPage() {
   if (!tenant) notFound();
 
   const token = getSessionToken();
-  const sessions = token ? await getActiveSessions(token) : [];
+  const [sessions, payments] = await Promise.all([
+    token ? getActiveSessions(token) : Promise.resolve([]),
+    getPaymentSettingsAction(),
+  ]);
 
   return (
     <AjustesView
       initialTenant={tenant}
       sessions={sessions}
       currentSessionId={session.session.id}
+      initialPayments={payments}
     />
   );
 }

@@ -26,6 +26,11 @@ export interface ConfirmedSnapshot extends BookingChoice {
   tenantInitials: string;
   countryCode: string;
   confirmedAt: string;
+  // Pago de seña/total (si el tenant lo cobra). Se completa al acreditarse.
+  depositAmount?: number | null;
+  depositKind?: "deposit" | "full" | null;
+  depositCurrency?: string | null;
+  paid?: boolean;
 }
 
 interface BookingStore extends BookingChoice {
@@ -39,6 +44,7 @@ interface BookingStore extends BookingChoice {
   nextStep: () => void;
   goToStep: (step: number) => void;
   confirm: (appointmentId: string, tenantName: string, tenantAddress: string | null, tenantInitials: string, countryCode?: string) => void;
+  setPaymentResult: (info: { depositAmount: number; depositKind: "deposit" | "full"; currency: string; paid: boolean }) => void;
   resetFlow: () => void;
   reset: () => void;
 }
@@ -136,6 +142,23 @@ export const useBookingStore = create<BookingStore>()(
           },
         });
       },
+
+      // Marca el resultado del pago sobre el snapshot ya confirmado, para que
+      // el ticket de éxito muestre "Seña pagada". No-op si no hay confirmado.
+      setPaymentResult: (info) =>
+        set((s) =>
+          s.confirmed
+            ? {
+                confirmed: {
+                  ...s.confirmed,
+                  depositAmount: info.depositAmount,
+                  depositKind: info.depositKind,
+                  depositCurrency: info.currency,
+                  paid: info.paid,
+                },
+              }
+            : {},
+        ),
 
       // Limpia step + elecciones del flujo (servicio, fecha, hora, etc.)
       // pero mantiene `confirmed` y datos del cliente (clientName, phone,

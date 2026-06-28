@@ -14,8 +14,32 @@ export interface Tenant {
   cover_url: string | null;
   is_public: boolean;
   created_at: string;
+  /** Config de seña/pago al reservar (cobros a este tenant vía Mercado Pago). */
+  deposit_mode?: "none" | "percent" | "fixed" | "full";
+  deposit_value?: number | string;
+  deposit_required?: boolean;
   /** Solo presente en la respuesta de POST /tenants si se envió email. */
   session_token?: string;
+}
+
+/** Estado de la conexión de Mercado Pago + config de seña (GET /payments/status). */
+export interface PaymentSettings {
+  connected: boolean;
+  mp_user_id: string | null;
+  deposit_mode: "none" | "percent" | "fixed" | "full";
+  deposit_value: number;
+  deposit_required: boolean;
+  currency: string;
+}
+
+/** Estado de un cobro de seña/pago (GET /payments/booking-status). */
+export interface BookingPaymentStatus {
+  status: "pending" | "approved" | "in_process" | "rejected" | "refunded" | "cancelled";
+  kind: "deposit" | "full";
+  amount: number;
+  currency: string;
+  appointment_status: string | null;
+  appointment_payment_status: string | null;
 }
 
 export interface AdminSession {

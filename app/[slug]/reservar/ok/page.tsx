@@ -36,6 +36,14 @@ function addMinutes(time: string, mins: number) {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
+function fmtMoney(n: number, currency?: string | null) {
+  return new Intl.NumberFormat("es-AR", {
+    style: "currency",
+    currency: currency || "ARS",
+    maximumFractionDigits: 0,
+  }).format(n);
+}
+
 // ─── Animated checkmark ────────────────────────────────────
 function AnimatedCheck() {
   return (
@@ -315,6 +323,24 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
             {confirmed.clientName && <DetailLine label="A nombre de" value={confirmed.clientName} />}
             <DetailLine label="Código" value={shortCode} mono />
           </div>
+
+          {/* Seña / pago acreditado */}
+          {confirmed.paid && confirmed.depositAmount != null && (
+            <div className="mx-[18px] mb-[16px] flex items-center gap-[11px] px-[14px] py-[12px] rounded-[10px] bg-line-2">
+              <div className="w-[28px] h-[28px] rounded-full bg-accent flex items-center justify-center flex-shrink-0">
+                <Icon name="check" size={15} color="#fff" strokeWidth={2.5} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-semibold text-ink-1" style={{ letterSpacing: "-0.2px" }}>
+                  {confirmed.depositKind === "full" ? "Pago realizado" : "Seña pagada"}
+                </div>
+                <div className="text-[11px] text-ink-3 mt-[1px]">Confirmado con Mercado Pago</div>
+              </div>
+              <div className="font-mono text-[14px] font-semibold text-ink-1 flex-shrink-0">
+                {fmtMoney(confirmed.depositAmount, confirmed.depositCurrency)}
+              </div>
+            </div>
+          )}
         </motion.div>
 
         {/* Aviso screenshot */}

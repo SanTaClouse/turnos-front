@@ -1,17 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
-import { logoutAction, revokeSessionAction } from "@/app/actions";
+import {
+  logoutAction,
+  revokeSessionAction,
+  getMpConnectUrlAction,
+  disconnectMpAction,
+  updateDepositConfigAction,
+} from "@/app/actions";
 import { getFrontendDomain } from "@/lib/config";
-import type { Tenant, AdminSession } from "@/types/api";
+import type { Tenant, AdminSession, PaymentSettings } from "@/types/api";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
+import { Switch } from "@/components/ui/switch";
+
+const MP_CYAN = "#009ee3";
+
+function depositSummary(p: PaymentSettings | null): string {
+  if (!p || !p.connected) return "Conectá Mercado Pago para cobrar señas";
+  switch (p.deposit_mode) {
+    case "percent":
+      return `Conectado · seña del ${p.deposit_value}%`;
+    case "fixed":
+      return `Conectado · seña fija`;
+    case "full":
+      return "Conectado · pago total al reservar";
+    default:
+      return "Conectado · sin seña configurada";
+  }
+}
 
 // ─── Helpers ───────────────────────────────────────────────
 function getInitials(name: string) {
@@ -404,6 +427,231 @@ function ComingSoonSheet({ title, description, onClose }: {
   );
 }
 
+// ─── Sheet: Cobros y señas (Mercado Pago) ─────────────────
+type DepositMode = "none" | "percent" | "fixed" | "full";
+
+function PaymentsSheet({
+  initial,
+  currency,
+  flash,
+  onClose,
+  onConfigSaved,
+}: {
+  initial: PaymentSettings | null;
+  currency: string;
+  flash: "connected" | "error" | null;
+  onClose: () => void;
+  onConfigSaved: (partial: {
+    deposit_mode: DepositMode;
+    deposit_value: number;
+    deposit_required: boolean;
+  }) => void;
+}) {
+  const connected = initial?.connected ?? false;
+  const [mode, setMode] = useState<DepositMode>(initial?.deposit_mode ?? "none");
+  const [value, setValue] = useState(
+    initial?.deposit_value ? String(initial.deposit_value) : "",
+  );
+  const [required, setRequired] = useState(initial?.deposit_required ?? false);
+  const [connecting, setConnecting] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [savedFlash, setSavedFlash] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const needsValue = mode === "percent" || mode === "fixed";
+  const numValue = Number(value);
+  const valid =
+    !needsValue ||
+    (Number.isFinite(numValue) &&
+      numValue > 0 &&
+      (mode !== "percent" || numValue <= 100));
+
+  const modes: { key: DepositMode; label: string; desc: string }[] = [
+    { key: "none", label: "No cobrar seña", desc: "El cliente reserva sin pagar nada" },
+    { key: "percent", label: "Porcentaje", desc: "Un % del precio del servicio" },
+    { key: "fixed", label: "Monto fijo", desc: "Un importe fijo por reserva" },
+    { key: "full", label: "Pago total", desc: "El 100% del servicio al reservar" },
+  ];
+
+  const handleConnect = async () => {
+    setConnecting(true);
+    setError(null);
+    try {
+      const { url } = await getMpConnectUrlAction();
+      window.location.href = url;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo iniciar la conexión");
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!confirm("¿Desconectar Mercado Pago? Vas a dejar de poder cobrar señas.")) return;
+    try {
+      await disconnectMpAction();
+      window.location.reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo desconectar");
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      const saved = await updateDepositConfigAction({
+        deposit_mode: mode,
+        deposit_value: needsValue ? numValue : undefined,
+        deposit_required: required,
+      });
+      onConfigSaved(saved);
+      setRequired(saved.deposit_required);
+      setSavedFlash(true);
+      setTimeout(() => setSavedFlash(false), 1600);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <BottomSheet open onClose={onClose} title="Cobros y señas">
+      <div className="flex flex-col gap-[16px]">
+        {/* Banner de resultado del OAuth */}
+        {flash === "connected" && (
+          <div className="flex items-center gap-[8px] px-[14px] py-[10px] rounded-[10px] text-[12px]" style={{ background: "rgba(46,160,90,0.12)", color: "#2e8b57" }}>
+            <Icon name="check" size={14} color="#2e8b57" strokeWidth={2.5} />
+            ¡Mercado Pago conectado con éxito!
+          </div>
+        )}
+        {flash === "error" && (
+          <div className="flex items-center gap-[8px] px-[14px] py-[10px] rounded-[10px] text-[12px]" style={{ background: "rgba(196,90,60,0.10)", color: "var(--danger)" }}>
+            <Icon name="alert" size={14} color="var(--danger)" />
+            No se pudo conectar. Probá de nuevo.
+          </div>
+        )}
+
+        {/* Conexión de Mercado Pago */}
+        {connected ? (
+          <div className="flex items-center gap-[12px] px-[14px] py-[12px] rounded-[12px] bg-line-2">
+            <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center flex-shrink-0" style={{ background: MP_CYAN }}>
+              <Icon name="check" size={16} color="#fff" strokeWidth={2.5} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="text-[14px] font-semibold" style={{ letterSpacing: "-0.2px" }}>Mercado Pago conectado</div>
+              <div className="text-[11px] text-ink-3 mt-[1px]">Los cobros van directo a tu cuenta</div>
+            </div>
+            <button
+              onClick={handleDisconnect}
+              className="press-fx text-[12px] font-medium text-danger flex-shrink-0"
+              style={{ background: "transparent", border: 0, cursor: "pointer" }}
+            >
+              Desconectar
+            </button>
+          </div>
+        ) : (
+          <div className="rounded-[12px] border border-line bg-surface p-[16px]">
+            <p className="text-[13px] text-ink-2 leading-[1.5]">
+              Conectá tu cuenta de Mercado Pago para cobrar señas a tus clientes.
+              La plata entra <strong>directo a tu cuenta</strong>, sin comisiones nuestras.
+            </p>
+            <button
+              onClick={handleConnect}
+              disabled={connecting}
+              className="press-fx w-full h-[48px] mt-[14px] rounded-[12px] flex items-center justify-center gap-[8px] text-white font-semibold text-[14px] disabled:opacity-70"
+              style={{ background: MP_CYAN, border: 0, cursor: connecting ? "wait" : "pointer", fontFamily: "inherit" }}
+            >
+              {connecting ? "Abriendo Mercado Pago…" : "Conectar Mercado Pago"}
+            </button>
+          </div>
+        )}
+
+        {/* Config de seña */}
+        <div>
+          <div className="label-mono mb-[8px]">¿Qué se paga al reservar?</div>
+          <div className="flex flex-col gap-[6px]">
+            {modes.map((m) => {
+              const active = mode === m.key;
+              return (
+                <button
+                  key={m.key}
+                  onClick={() => setMode(m.key)}
+                  className="press-fx flex items-center gap-[12px] px-[14px] py-[12px] rounded-[12px] border text-left"
+                  style={{
+                    borderColor: active ? "var(--ink-1)" : "var(--line)",
+                    background: active ? "var(--line-2)" : "var(--surface)",
+                    cursor: "pointer",
+                    fontFamily: "inherit",
+                  }}
+                >
+                  <div
+                    className="w-[18px] h-[18px] rounded-full border flex items-center justify-center flex-shrink-0"
+                    style={{ borderColor: active ? "var(--ink-1)" : "var(--line)" }}
+                  >
+                    {active && <div className="w-[9px] h-[9px] rounded-full bg-ink-1" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-[14px] font-medium text-ink-1">{m.label}</div>
+                    <div className="text-[11px] text-ink-3 mt-[1px]">{m.desc}</div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Valor de la seña */}
+        {needsValue && (
+          <div>
+            <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">
+              {mode === "percent" ? "Porcentaje de seña" : "Monto de la seña"}
+            </label>
+            <div className="relative">
+              <input
+                value={value}
+                onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ""))}
+                inputMode="decimal"
+                placeholder={mode === "percent" ? "30" : "2000"}
+                className="w-full h-[48px] border border-line bg-surface rounded-sm px-[14px] pr-[46px] text-[15px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent"
+                style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+              />
+              <span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[13px] text-ink-3 font-mono">
+                {mode === "percent" ? "%" : currency}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Seña obligatoria */}
+        {mode !== "none" && (
+          <div className="flex items-center gap-[12px] px-[14px] py-[12px] rounded-[12px] border border-line">
+            <div className="flex-1 min-w-0">
+              <div className="text-[14px] font-medium text-ink-1">Seña obligatoria</div>
+              <div className="text-[11px] text-ink-3 mt-[1px]">El turno se confirma solo si paga la seña</div>
+            </div>
+            <Switch checked={required} onCheckedChange={(v) => setRequired(v)} />
+          </div>
+        )}
+
+        {/* Aviso si configuró seña pero no conectó MP */}
+        {!connected && mode !== "none" && (
+          <p className="text-[11px] text-ink-3 leading-[1.5] flex items-start gap-[6px]">
+            <Icon name="alert" size={13} color="var(--ink-3)" className="flex-shrink-0 mt-[1px]" />
+            Para que el cobro funcione necesitás conectar Mercado Pago arriba. Igual podés guardar la configuración.
+          </p>
+        )}
+
+        {error && <p className="text-[12px] text-danger">{error}</p>}
+
+        <Btn onClick={handleSave} loading={saving} disabled={!valid} size="lg" full className="mt-[2px]">
+          {savedFlash ? "Guardado ✓" : "Guardar configuración"}
+        </Btn>
+      </div>
+    </BottomSheet>
+  );
+}
+
 // ─── Main view ─────────────────────────────────────────────
 type SheetType =
   | "info"
@@ -414,22 +662,39 @@ type SheetType =
   | "policy"
   | "team"
   | "devices"
+  | "payments"
   | null;
 
 export function AjustesView({
   initialTenant,
   sessions: initialSessions,
   currentSessionId,
+  initialPayments,
 }: {
   initialTenant: Tenant;
   sessions: AdminSession[];
   currentSessionId: string;
+  initialPayments: PaymentSettings | null;
 }) {
   const router = useRouter();
   const [tenant, setTenant] = useState(initialTenant);
   const [sessions, setSessions] = useState(initialSessions);
+  const [payments, setPayments] = useState(initialPayments);
   const [openSheet, setOpenSheet] = useState<SheetType>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [mpFlash, setMpFlash] = useState<"connected" | "error" | null>(null);
+
+  // Al volver del OAuth de Mercado Pago, el back redirige con ?mp=connected|error.
+  // Abrimos el sheet de cobros con el resultado y limpiamos el query de la URL.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const mp = params.get("mp");
+    if (mp === "connected" || mp === "error") {
+      setMpFlash(mp);
+      setOpenSheet("payments");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const initials = getInitials(tenant.name);
   const publicUrl = `${getFrontendDomain()}/${tenant.slug}`;
@@ -543,6 +808,16 @@ export function AjustesView({
           />
         </Group>
 
+        {/* Grupo: Cobros */}
+        <Group label="Cobros">
+          <SectionRow
+            icon="trending"
+            title="Cobros y señas"
+            subtitle={depositSummary(payments)}
+            onClick={() => setOpenSheet("payments")}
+          />
+        </Group>
+
         {/* Grupo: Equipo */}
         <Group label="Equipo">
           <SectionRow
@@ -626,6 +901,22 @@ export function AjustesView({
           currentSessionId={currentSessionId}
           onClose={() => setOpenSheet(null)}
           onChanged={setSessions}
+        />
+      )}
+      {openSheet === "payments" && (
+        <PaymentsSheet
+          initial={payments}
+          currency={tenant.currency}
+          flash={mpFlash}
+          onClose={() => {
+            setMpFlash(null);
+            setOpenSheet(null);
+          }}
+          onConfigSaved={(partial) =>
+            setPayments((prev) =>
+              prev ? { ...prev, ...partial } : prev,
+            )
+          }
         />
       )}
     </>
