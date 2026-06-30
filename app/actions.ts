@@ -186,19 +186,23 @@ export async function disconnectMpAction(): Promise<{ disconnected: true }> {
   return (await res.json()) as { disconnected: true };
 }
 
-/** Actualiza la config de seña (modo / valor / obligatoria). */
-export async function updateDepositConfigAction(input: {
-  deposit_mode: "none" | "percent" | "fixed" | "full";
+/** Actualiza las opciones de pago que ofrece el tenant. */
+export async function updatePaymentOptionsAction(input: {
+  allow_deposit: boolean;
+  deposit_type?: "percent" | "fixed";
   deposit_value?: number;
-  deposit_required?: boolean;
+  allow_full: boolean;
+  allow_pay_later: boolean;
 }): Promise<{
-  deposit_mode: "none" | "percent" | "fixed" | "full";
+  allow_deposit: boolean;
+  deposit_type: "percent" | "fixed";
   deposit_value: number;
-  deposit_required: boolean;
+  allow_full: boolean;
+  allow_pay_later: boolean;
 }> {
   const token = getSessionToken();
   if (!token) throw new Error("Sin sesión activa");
-  const res = await fetch(`${BACKEND_URL}/payments/deposit-config`, {
+  const res = await fetch(`${BACKEND_URL}/payments/options`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,

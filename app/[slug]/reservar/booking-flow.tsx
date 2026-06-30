@@ -626,10 +626,11 @@ export function BookingFlow({ tenant, services, resources, availableDaysOfWeek, 
         source: "web",
       });
       store.confirm(appt.id, tenant.name, tenant.address, initials, countryCode);
-      // Si el negocio cobra seña, pasamos por el paso de pago antes del ticket.
-      const hasDeposit = !!tenant.deposit_mode && tenant.deposit_mode !== "none";
+      // Si el negocio ofrece pago online (seña o completo), pasamos por el paso
+      // de pago para que el cliente elija. Si no, directo al ticket.
+      const hasOnlinePayment = !!tenant.allow_deposit || !!tenant.allow_full;
       router.push(
-        hasDeposit
+        hasOnlinePayment
           ? `/${tenant.slug}/reservar/pago`
           : `/${tenant.slug}/reservar/ok`,
       );

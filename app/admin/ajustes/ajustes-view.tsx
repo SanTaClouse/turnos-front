@@ -9,7 +9,7 @@ import {
   revokeSessionAction,
   getMpConnectUrlAction,
   disconnectMpAction,
-  updateDepositConfigAction,
+  updatePaymentOptionsAction,
 } from "@/app/actions";
 import { getFrontendDomain } from "@/lib/config";
 import type { Tenant, AdminSession, PaymentSettings } from "@/types/api";
@@ -24,16 +24,12 @@ const MP_CYAN = "#009ee3";
 
 function depositSummary(p: PaymentSettings | null): string {
   if (!p || !p.connected) return "Conectá Mercado Pago para cobrar señas";
-  switch (p.deposit_mode) {
-    case "percent":
-      return `Conectado · seña del ${p.deposit_value}%`;
-    case "fixed":
-      return `Conectado · seña fija`;
-    case "full":
-      return "Conectado · pago total al reservar";
-    default:
-      return "Conectado · sin seña configurada";
-  }
+  const parts: string[] = [];
+  if (p.allow_deposit)
+    parts.push(p.deposit_type === "percent" ? `seña ${p.deposit_value}%` : "seña fija");
+  if (p.allow_full) parts.push("pago completo");
+  if (p.allow_pay_later) parts.push("pagar en el local");
+  return parts.length ? "Conectado · " + parts.join(" · ") : "Conectado · sin opciones";
 }
 
 // ─── Helpers ───────────────────────────────────────────────
@@ -427,9 +423,7 @@ function ComingSoonSheet({ title, description, onClose }: {
   );
 }
 
-// ─── Sheet: Cobros y señas (Mercado Pago) ─────────────────
-type DepositMode = "none" | "percent" | "fixed" | "full";
-
+// ─── Sheet: Cobros y opciones de pago (Mercado Pago) ──────
 function PaymentsSheet({
   initial,
   currency,
@@ -441,37 +435,31 @@ function PaymentsSheet({
   currency: string;
   flash: "connected" | "error" | null;
   onClose: () => void;
-  onConfigSaved: (partial: {
-    deposit_mode: DepositMode;
-    deposit_value: number;
-    deposit_required: boolean;
-  }) => void;
+  onConfigSaved: (partial: Partial<PaymentSettings>) => void;
 }) {
   const connected = initial?.connected ?? false;
-  const [mode, setMode] = useState<DepositMode>(initial?.deposit_mode ?? "none");
+  const [allowDeposit, setAllowDeposit] = useState(initial?.allow_deposit ?? false);
+  const [depositType, setDepositType] = useState<"percent" | "fixed">(
+    initial?.deposit_type ?? "percent",
+  );
   const [value, setValue] = useState(
     initial?.deposit_value ? String(initial.deposit_value) : "",
   );
-  const [required, setRequired] = useState(initial?.deposit_required ?? false);
+  const [allowFull, setAllowFull] = useState(initial?.allow_full ?? false);
+  const [allowPayLater, setAllowPayLater] = useState(initial?.allow_pay_later ?? true);
   const [connecting, setConnecting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const needsValue = mode === "percent" || mode === "fixed";
   const numValue = Number(value);
-  const valid =
-    !needsValue ||
+  const depositValid =
+    !allowDeposit ||
     (Number.isFinite(numValue) &&
       numValue > 0 &&
-      (mode !== "percent" || numValue <= 100));
-
-  const modes: { key: DepositMode; label: string; desc: string }[] = [
-    { key: "none", label: "No cobrar seña", desc: "El cliente reserva sin pagar nada" },
-    { key: "percent", label: "Porcentaje", desc: "Un % del precio del servicio" },
-    { key: "fixed", label: "Monto fijo", desc: "Un importe fijo por reserva" },
-    { key: "full", label: "Pago total", desc: "El 100% del servicio al reservar" },
-  ];
+      (depositType !== "percent" || numValue <= 100));
+  const anyEnabled = allowDeposit || allowFull || allowPayLater;
+  const valid = depositValid && anyEnabled;
 
   const handleConnect = async () => {
     setConnecting(true);
@@ -499,13 +487,15 @@ function PaymentsSheet({
     setSaving(true);
     setError(null);
     try {
-      const saved = await updateDepositConfigAction({
-        deposit_mode: mode,
-        deposit_value: needsValue ? numValue : undefined,
-        deposit_required: required,
+      const saved = await updatePaymentOptionsAction({
+        allow_deposit: allowDeposit,
+        deposit_type: depositType,
+        deposit_value: allowDeposit ? numValue : undefined,
+        allow_full: allowFull,
+        allow_pay_later: allowPayLater,
       });
       onConfigSaved(saved);
-      setRequired(saved.deposit_required);
+      setAllowPayLater(saved.allow_pay_later);
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1600);
     } catch (e) {
@@ -567,78 +557,86 @@ function PaymentsSheet({
           </div>
         )}
 
-        {/* Config de seña */}
+        {/* Opciones de pago */}
         <div>
-          <div className="label-mono mb-[8px]">¿Qué se paga al reservar?</div>
-          <div className="flex flex-col gap-[6px]">
-            {modes.map((m) => {
-              const active = mode === m.key;
-              return (
-                <button
-                  key={m.key}
-                  onClick={() => setMode(m.key)}
-                  className="press-fx flex items-center gap-[12px] px-[14px] py-[12px] rounded-[12px] border text-left"
-                  style={{
-                    borderColor: active ? "var(--ink-1)" : "var(--line)",
-                    background: active ? "var(--line-2)" : "var(--surface)",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                  }}
-                >
-                  <div
-                    className="w-[18px] h-[18px] rounded-full border flex items-center justify-center flex-shrink-0"
-                    style={{ borderColor: active ? "var(--ink-1)" : "var(--line)" }}
-                  >
-                    {active && <div className="w-[9px] h-[9px] rounded-full bg-ink-1" />}
+          <div className="label-mono mb-[8px]">Opciones que ve el cliente al reservar</div>
+          <div className="flex flex-col gap-[8px]">
+            {/* Seña */}
+            <div className="rounded-[12px] border border-line overflow-hidden">
+              <div className="flex items-center gap-[12px] px-[14px] py-[12px]">
+                <div className="flex-1 min-w-0">
+                  <div className="text-[14px] font-medium text-ink-1">Seña</div>
+                  <div className="text-[11px] text-ink-3 mt-[1px]">Paga una parte para reservar</div>
+                </div>
+                <Switch checked={allowDeposit} onCheckedChange={(v) => setAllowDeposit(v)} />
+              </div>
+              {allowDeposit && (
+                <div className="px-[14px] pb-[14px] flex flex-col gap-[10px] border-t border-line-2">
+                  <div className="flex gap-[6px] mt-[12px]">
+                    {(["percent", "fixed"] as const).map((t) => {
+                      const on = depositType === t;
+                      return (
+                        <button
+                          key={t}
+                          onClick={() => setDepositType(t)}
+                          className="press-fx flex-1 h-[38px] rounded-[10px] border text-[13px] font-medium text-ink-1"
+                          style={{
+                            borderColor: on ? "var(--ink-1)" : "var(--line)",
+                            background: on ? "var(--line-2)" : "var(--surface)",
+                            cursor: "pointer",
+                            fontFamily: "inherit",
+                          }}
+                        >
+                          {t === "percent" ? "Porcentaje" : "Monto fijo"}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-[14px] font-medium text-ink-1">{m.label}</div>
-                    <div className="text-[11px] text-ink-3 mt-[1px]">{m.desc}</div>
+                  <div className="relative">
+                    <input
+                      value={value}
+                      onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ""))}
+                      inputMode="decimal"
+                      placeholder={depositType === "percent" ? "30" : "2000"}
+                      className="w-full h-[44px] border border-line bg-surface rounded-sm px-[14px] pr-[46px] text-[15px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent"
+                      style={{ fontFamily: "var(--font-jetbrains-mono)" }}
+                    />
+                    <span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[13px] text-ink-3 font-mono">
+                      {depositType === "percent" ? "%" : currency}
+                    </span>
                   </div>
-                </button>
-              );
-            })}
+                </div>
+              )}
+            </div>
+
+            {/* Pago completo */}
+            <ToggleRow
+              title="Pago completo"
+              desc="El cliente paga el 100% al reservar"
+              checked={allowFull}
+              onChange={setAllowFull}
+            />
+
+            {/* Pagar en el local */}
+            <ToggleRow
+              title="Pagar en el local"
+              desc="Reserva sin pagar online"
+              checked={allowPayLater}
+              onChange={setAllowPayLater}
+            />
           </div>
         </div>
 
-        {/* Valor de la seña */}
-        {needsValue && (
-          <div>
-            <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">
-              {mode === "percent" ? "Porcentaje de seña" : "Monto de la seña"}
-            </label>
-            <div className="relative">
-              <input
-                value={value}
-                onChange={(e) => setValue(e.target.value.replace(/[^\d.]/g, ""))}
-                inputMode="decimal"
-                placeholder={mode === "percent" ? "30" : "2000"}
-                className="w-full h-[48px] border border-line bg-surface rounded-sm px-[14px] pr-[46px] text-[15px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent"
-                style={{ fontFamily: "var(--font-jetbrains-mono)" }}
-              />
-              <span className="absolute right-[14px] top-1/2 -translate-y-1/2 text-[13px] text-ink-3 font-mono">
-                {mode === "percent" ? "%" : currency}
-              </span>
-            </div>
-          </div>
+        {/* Avisos */}
+        {!anyEnabled && (
+          <p className="text-[11px] text-danger leading-[1.5]">
+            Habilitá al menos una opción para que el cliente pueda reservar.
+          </p>
         )}
-
-        {/* Seña obligatoria */}
-        {mode !== "none" && (
-          <div className="flex items-center gap-[12px] px-[14px] py-[12px] rounded-[12px] border border-line">
-            <div className="flex-1 min-w-0">
-              <div className="text-[14px] font-medium text-ink-1">Seña obligatoria</div>
-              <div className="text-[11px] text-ink-3 mt-[1px]">El turno se confirma solo si paga la seña</div>
-            </div>
-            <Switch checked={required} onCheckedChange={(v) => setRequired(v)} />
-          </div>
-        )}
-
-        {/* Aviso si configuró seña pero no conectó MP */}
-        {!connected && mode !== "none" && (
+        {!connected && (allowDeposit || allowFull) && (
           <p className="text-[11px] text-ink-3 leading-[1.5] flex items-start gap-[6px]">
             <Icon name="alert" size={13} color="var(--ink-3)" className="flex-shrink-0 mt-[1px]" />
-            Para que el cobro funcione necesitás conectar Mercado Pago arriba. Igual podés guardar la configuración.
+            Para cobrar online necesitás conectar Mercado Pago arriba. Igual podés guardar la configuración.
           </p>
         )}
 
@@ -649,6 +647,28 @@ function PaymentsSheet({
         </Btn>
       </div>
     </BottomSheet>
+  );
+}
+
+function ToggleRow({
+  title,
+  desc,
+  checked,
+  onChange,
+}: {
+  title: string;
+  desc: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+}) {
+  return (
+    <div className="flex items-center gap-[12px] px-[14px] py-[12px] rounded-[12px] border border-line">
+      <div className="flex-1 min-w-0">
+        <div className="text-[14px] font-medium text-ink-1">{title}</div>
+        <div className="text-[11px] text-ink-3 mt-[1px]">{desc}</div>
+      </div>
+      <Switch checked={checked} onCheckedChange={(v) => onChange(v)} />
+    </div>
   );
 }
 
