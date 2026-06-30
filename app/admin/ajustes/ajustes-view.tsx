@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { api } from "@/lib/api";
+import { uploadTenantLogo, validateImage, isCloudinaryConfigured } from "@/lib/cloudinary";
 import {
   logoutAction,
   revokeSessionAction,
@@ -171,6 +172,131 @@ function InfoSheet({ tenant, onClose, onSaved }: {
         </div>
         {error && <p className="text-[12px] text-danger">{error}</p>}
         <Btn onClick={handleSave} loading={saving} disabled={form.name.trim().length < 2} size="lg" full className="mt-[6px]">
+          Guardar cambios
+        </Btn>
+      </div>
+    </BottomSheet>
+  );
+}
+
+// ─── Sheet: Foto de perfil (logo) ──────────────────────────
+function LogoSheet({ tenant, onClose, onSaved }: {
+  tenant: Tenant;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [logoUrl, setLogoUrl] = useState<string | null>(tenant.logo_url);
+  const [uploading, setUploading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const initials = getInitials(tenant.name);
+  const dirty = logoUrl !== tenant.logo_url;
+  const configured = isCloudinaryConfigured();
+
+  const handlePick = () => fileRef.current?.click();
+
+  const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // permite volver a elegir el mismo archivo
+    if (!file) return;
+
+    const validationError = validateImage(file);
+    if (validationError) {
+      setError(validationError);
+      return;
+    }
+
+    setUploading(true);
+    setError(null);
+    try {
+      const url = await uploadTenantLogo(file);
+      setLogoUrl(url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo subir la imagen");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemove = () => {
+    setLogoUrl(null);
+    setError(null);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await api.patch(`/tenants/${tenant.id}`, { logo_url: logoUrl });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <BottomSheet open onClose={onClose} title="Foto de perfil">
+      <div className="flex flex-col items-center gap-[14px]">
+        <p className="text-[13px] text-ink-2 leading-[1.5] text-center">
+          La imagen que ven tus clientes en tu landing pública y en el panel.
+        </p>
+
+        {/* Preview */}
+        <div className="relative">
+          <BrandMark initials={initials} imageUrl={logoUrl} size={104} />
+          {uploading && (
+            <div className="absolute inset-0 rounded-[29px] flex items-center justify-center bg-black/40">
+              <Icon name="sparkle" size={22} color="#fff" />
+            </div>
+          )}
+        </div>
+
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          onChange={handleFile}
+          className="hidden"
+        />
+
+        <div className="flex gap-[8px] w-full">
+          <Btn
+            variant="secondary"
+            size="md"
+            full
+            onClick={handlePick}
+            disabled={uploading || !configured}
+          >
+            {uploading ? "Subiendo…" : logoUrl ? "Cambiar foto" : "Subir foto"}
+          </Btn>
+          {logoUrl && (
+            <Btn variant="secondary" size="md" full onClick={handleRemove} disabled={uploading}>
+              Quitar
+            </Btn>
+          )}
+        </div>
+
+        {!configured && (
+          <p className="text-[11px] text-ink-3 leading-[1.5] text-center flex items-start gap-[6px]">
+            <Icon name="alert" size={13} color="var(--ink-3)" className="flex-shrink-0 mt-[1px]" />
+            Falta configurar Cloudinary (NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME y _UPLOAD_PRESET).
+          </p>
+        )}
+
+        {error && <p className="text-[12px] text-danger text-center">{error}</p>}
+
+        <Btn
+          onClick={handleSave}
+          loading={saving}
+          disabled={!dirty || uploading}
+          size="lg"
+          full
+          className="mt-[2px]"
+        >
           Guardar cambios
         </Btn>
       </div>
@@ -675,6 +801,7 @@ function ToggleRow({
 // ─── Main view ─────────────────────────────────────────────
 type SheetType =
   | "info"
+  | "logo"
   | "url"
   | "whatsapp"
   | "hours"
@@ -745,7 +872,7 @@ export function AjustesView({
         {/* Top card: brand + nombre + URL + acciones */}
         <div className="bg-surface border border-line rounded p-[18px_16px] mb-[20px]">
           <div className="flex items-center gap-[14px]">
-            <BrandMark initials={initials} size={52} />
+            <BrandMark initials={initials} imageUrl={tenant.logo_url} size={52} />
             <div className="flex-1 min-w-0">
               <div className="font-serif text-[22px] truncate" style={{ letterSpacing: "-0.3px" }}>
                 {tenant.name}
@@ -783,10 +910,9 @@ export function AjustesView({
           <Divider />
           <SectionRow
             icon="image"
-            title="Logo y portada"
-            subtitle="Personalizar imagen"
-            onClick={() => setOpenSheet("hours")}
-            disabled
+            title="Foto de perfil"
+            subtitle={tenant.logo_url ? "Imagen cargada" : "Subí el logo de tu negocio"}
+            onClick={() => setOpenSheet("logo")}
           />
           <Divider />
           <SectionRow
@@ -887,6 +1013,9 @@ export function AjustesView({
       {/* Sheets */}
       {openSheet === "info" && (
         <InfoSheet tenant={tenant} onClose={() => setOpenSheet(null)} onSaved={handleSaved} />
+      )}
+      {openSheet === "logo" && (
+        <LogoSheet tenant={tenant} onClose={() => setOpenSheet(null)} onSaved={handleSaved} />
       )}
       {openSheet === "url" && (
         <UrlSheet tenant={tenant} onClose={() => setOpenSheet(null)} onSaved={handleSaved} />

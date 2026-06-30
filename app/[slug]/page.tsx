@@ -83,7 +83,7 @@ export default async function LandingPage({ params }: Props) {
         {/* ── Hero ── */}
         <div className="px-[28px] pt-[28px] pb-[28px]">
           <div className="flex items-center gap-[14px]">
-            <BrandMark initials={initials} size={52} />
+            <BrandMark initials={initials} imageUrl={tenant.logo_url} size={52} />
             <div className="flex-1 min-w-0">
               <div className="text-[19px] font-semibold leading-[1.1]" style={{ letterSpacing: "-0.3px" }}>
                 {tenant.name}
