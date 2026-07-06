@@ -193,12 +193,14 @@ export async function updatePaymentOptionsAction(input: {
   deposit_value?: number;
   allow_full: boolean;
   allow_pay_later: boolean;
+  require_deposit_new_clients?: boolean;
 }): Promise<{
   allow_deposit: boolean;
   deposit_type: "percent" | "fixed";
   deposit_value: number;
   allow_full: boolean;
   allow_pay_later: boolean;
+  require_deposit_new_clients: boolean;
 }> {
   const token = getSessionToken();
   if (!token) throw new Error("Sin sesión activa");
@@ -214,6 +216,32 @@ export async function updatePaymentOptionsAction(input: {
   if (!res.ok) {
     const err = (await res.json().catch(() => ({}))) as { message?: string };
     throw new Error(err.message ?? "No se pudo guardar la configuración");
+  }
+  return res.json();
+}
+
+/**
+ * Marca/desmarca a un cliente como frecuente para el tenant de la sesión.
+ * Los frecuentes no pagan seña obligatoria al reservar.
+ */
+export async function setClientFrequentAction(
+  clientId: string,
+  isFrequent: boolean,
+): Promise<{ client_id: string; is_frequent: boolean }> {
+  const token = getSessionToken();
+  if (!token) throw new Error("Sin sesión activa");
+  const res = await fetch(`${BACKEND_URL}/clients/${clientId}/frequent`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ is_frequent: isFrequent }),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { message?: string };
+    throw new Error(err.message ?? "No se pudo actualizar el cliente");
   }
   return res.json();
 }

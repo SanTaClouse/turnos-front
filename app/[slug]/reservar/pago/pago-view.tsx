@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import { api } from "@/lib/api";
 import { useBookingStore } from "@/store/booking";
-import type { Tenant } from "@/types/api";
+import type { Tenant, CheckoutOptions } from "@/types/api";
 import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
 import { BrandMark } from "@/components/ui/brand-mark";
@@ -73,6 +73,26 @@ export function PagoView({ slug, tenant }: { slug: string; tenant: Tenant }) {
     return useBookingStore.persist.onFinishHydration(() => setHydrated(true));
   }, [hydrated]);
 
+  // Opciones de pago calculadas en el BACK para este turno puntual: respeta
+  // la seña obligatoria por cliente (a un cliente nuevo no se le ofrece
+  // "pagar en el local"). Si falla, caemos a la lógica local sobre el tenant.
+  const appointmentId = confirmed?.appointmentId;
+  const [checkout, setCheckout] = useState<CheckoutOptions | null>(null);
+  const [checkoutFailed, setCheckoutFailed] = useState(false);
+  useEffect(() => {
+    if (!hydrated || !appointmentId) return;
+    let alive = true;
+    api
+      .get<CheckoutOptions>(
+        `/payments/checkout-options?appointment_id=${appointmentId}`,
+      )
+      .then((res) => alive && setCheckout(res))
+      .catch(() => alive && setCheckoutFailed(true));
+    return () => {
+      alive = false;
+    };
+  }, [hydrated, appointmentId]);
+
   if (!hydrated) return <PagoSkeleton />;
 
   if (!confirmed) {
@@ -86,6 +106,10 @@ export function PagoView({ slug, tenant }: { slug: string; tenant: Tenant }) {
     );
   }
 
+  // Esperamos la respuesta del back antes de armar las tarjetas (salvo que
+  // haya fallado: ahí usamos el fallback local).
+  if (!checkout && !checkoutFailed) return <PagoSkeleton />;
+
   const price = confirmed.servicePrice ?? 0;
   const value = Number(tenant.deposit_value ?? 0);
 
@@ -96,27 +120,48 @@ export function PagoView({ slug, tenant }: { slug: string; tenant: Tenant }) {
       maximumFractionDigits: 0,
     }).format(n);
 
-  // Armamos las opciones habilitadas por el tenant.
   const options: PayOption[] = [];
-  if (tenant.allow_deposit) {
-    const amount = computeDeposit(tenant.deposit_type, value, price);
-    if (amount > 0) {
-      options.push({
-        key: "deposit",
-        label: "Seña",
-        sub:
-          tenant.deposit_type === "percent"
-            ? `${value}% del total · se descuenta`
-            : "Para reservar · se descuenta",
-        amount,
-      });
+  if (checkout) {
+    // Fuente autoritativa: el back ya filtró qué opciones aplican a ESTE turno.
+    for (const opt of checkout.options) {
+      if (opt.kind === "deposit" && opt.amount) {
+        options.push({
+          key: "deposit",
+          label: "Seña",
+          sub:
+            checkout.deposit_type === "percent"
+              ? `${checkout.deposit_value}% del total · se descuenta`
+              : "Para reservar · se descuenta",
+          amount: opt.amount,
+        });
+      } else if (opt.kind === "full" && opt.amount) {
+        options.push({ key: "full", label: "Pago completo", sub: "Pagás todo ahora", amount: opt.amount });
+      } else if (opt.kind === "pay_later") {
+        options.push({ key: "pay_later", label: "Pagar en el local", sub: "Reservás y pagás al ir", amount: null });
+      }
     }
-  }
-  if (tenant.allow_full && price > 0) {
-    options.push({ key: "full", label: "Pago completo", sub: "Pagás todo ahora", amount: price });
-  }
-  if (tenant.allow_pay_later) {
-    options.push({ key: "pay_later", label: "Pagar en el local", sub: "Reservás y pagás al ir", amount: null });
+  } else {
+    // Fallback local (el back no respondió): opciones según el tenant.
+    if (tenant.allow_deposit) {
+      const amount = computeDeposit(tenant.deposit_type, value, price);
+      if (amount > 0) {
+        options.push({
+          key: "deposit",
+          label: "Seña",
+          sub:
+            tenant.deposit_type === "percent"
+              ? `${value}% del total · se descuenta`
+              : "Para reservar · se descuenta",
+          amount,
+        });
+      }
+    }
+    if (tenant.allow_full && price > 0) {
+      options.push({ key: "full", label: "Pago completo", sub: "Pagás todo ahora", amount: price });
+    }
+    if (tenant.allow_pay_later) {
+      options.push({ key: "pay_later", label: "Pagar en el local", sub: "Reservás y pagás al ir", amount: null });
+    }
   }
 
   // Sin opciones cobrables: el turno ya quedó reservado.
@@ -167,6 +212,15 @@ export function PagoView({ slug, tenant }: { slug: string; tenant: Tenant }) {
           {confirmed.date && (
             <p className="text-[13px] text-ink-2 mt-[8px] text-center">
               {confirmed.serviceName} · {formatDate(confirmed.date)} · {confirmed.time}
+            </p>
+          )}
+          {checkout?.payment_required && (
+            <p
+              className="text-[12px] mt-[10px] text-center leading-[1.5] px-[14px] py-[8px] rounded-[10px]"
+              style={{ background: "var(--line-2)", color: "var(--ink-2)" }}
+            >
+              Este negocio pide el pago online para confirmar el turno. Tenés
+              30 minutos; si no se completa, el horario se libera.
             </p>
           )}
         </motion.div>

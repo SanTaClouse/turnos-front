@@ -117,6 +117,9 @@ self.addEventListener("push", (event) => {
     actions,
     requireInteraction: true,
     renotify: true,
+    // Android: sin patrón de vibración algunas ROMs entregan la notif "en
+    // silencio" aunque el canal tenga sonido. iOS lo ignora.
+    vibrate: [200, 100, 200],
   };
 
   event.waitUntil(self.registration.showNotification(title, options));

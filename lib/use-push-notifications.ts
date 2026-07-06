@@ -20,6 +20,25 @@ function urlBase64ToUint8Array(base64String: string): Uint8Array<ArrayBuffer> {
   return output;
 }
 
+/**
+ * ¿La suscripción existente fue creada con la VAPID key vigente?
+ *
+ * Si la key pública rotó (cambio de env en el build), la suscripción vieja
+ * queda inservible: FCM responde 403 "VAPID credentials do not correspond..."
+ * y Apple 400 VapidPkHashMismatch, y las push NUNCA llegan. Detectamos el
+ * mismatch para darla de baja y re-suscribir con la key actual.
+ */
+function subscriptionMatchesKey(
+  subscription: PushSubscription,
+  vapidKey: Uint8Array,
+): boolean {
+  const raw = subscription.options?.applicationServerKey;
+  if (!raw) return true; // no se puede verificar — asumimos que está bien
+  const current = new Uint8Array(raw);
+  if (current.length !== vapidKey.length) return false;
+  return current.every((byte, i) => byte === vapidKey[i]);
+}
+
 export function usePushNotifications(tenantId: string | null) {
   const [permission, setPermission] = useState<NotificationPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
@@ -41,7 +60,27 @@ export function usePushNotifications(tenantId: string | null) {
         const registration = await navigator.serviceWorker.ready;
 
         // Verificar si ya está suscrito
-        const subscription = await registration.pushManager.getSubscription();
+        let subscription = await registration.pushManager.getSubscription();
+
+        // Auto-reparación: si la suscripción quedó atada a una VAPID key
+        // vieja, la damos de baja y creamos una nueva con la key vigente
+        // (solo si el permiso ya está dado — acá no podemos pedirlo).
+        const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+        if (subscription && vapidKey) {
+          const currentKey = urlBase64ToUint8Array(vapidKey);
+          if (!subscriptionMatchesKey(subscription, currentKey)) {
+            console.warn("Push subscription con VAPID key vieja — re-suscribiendo");
+            await subscription.unsubscribe();
+            subscription =
+              Notification.permission === "granted"
+                ? await registration.pushManager.subscribe({
+                    userVisibleOnly: true,
+                    applicationServerKey: currentKey,
+                  })
+                : null;
+          }
+        }
+
         setIsSubscribed(!!subscription);
 
         // Si está suscrito, notificar al backend
@@ -96,9 +135,18 @@ export function usePushNotifications(tenantId: string | null) {
       }
 
       const registration = await navigator.serviceWorker.ready;
+      const currentKey = urlBase64ToUint8Array(vapidKey);
+
+      // Si hay una suscripción vieja con otra VAPID key, subscribe() tiraría
+      // InvalidStateError. La damos de baja primero.
+      const existing = await registration.pushManager.getSubscription();
+      if (existing && !subscriptionMatchesKey(existing, currentKey)) {
+        await existing.unsubscribe();
+      }
+
       const subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(vapidKey),
+        applicationServerKey: currentKey,
       });
 
       // Guardar en backend

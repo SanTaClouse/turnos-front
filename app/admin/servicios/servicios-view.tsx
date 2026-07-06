@@ -195,7 +195,7 @@ function ServiceEditor({
         {/* Buffer */}
         <div>
           <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">
-            Buffer entre turnos <span className="font-mono text-[10px] text-ink-3">opcional</span>
+            Descanso después del turno <span className="font-mono text-[10px] text-ink-3">opcional</span>
           </label>
           <div className="flex gap-[4px]">
             {[0, 5, 10, 15].map((b) => {
@@ -217,7 +217,12 @@ function ServiceEditor({
               );
             })}
           </div>
-          <p className="text-[11px] text-ink-3 mt-[4px]">Tiempo entre turnos para limpieza/preparación.</p>
+          <p className="text-[11px] text-ink-3 mt-[4px] leading-[1.45]">
+            Minutos que se bloquean DESPUÉS de cada turno de este servicio
+            (limpieza, preparación). Ocupa agenda: un servicio de 60min con
+            +15m ocupa 1:15h, y el próximo horario ofrecido lo tiene en cuenta.
+            Dejalo en 0 si atendés un turno atrás de otro.
+          </p>
         </div>
 
         {/* Descripción */}

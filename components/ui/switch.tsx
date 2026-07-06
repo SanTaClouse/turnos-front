@@ -1,32 +1,50 @@
-"use client"
+"use client";
 
-import { Switch as SwitchPrimitive } from "@base-ui/react/switch"
-
-import { cn } from "@/lib/utils"
-
-function Switch({
-  className,
-  size = "default",
-  ...props
-}: SwitchPrimitive.Root.Props & {
-  size?: "sm" | "default"
+/**
+ * Toggle con la estética del proyecto (mismo look que el de Horarios).
+ *
+ * Reemplaza al Switch de shadcn/base-ui que usaba tokens (`bg-primary`,
+ * `bg-input`, `bg-background`) que NO existen en nuestro theme: se veía igual
+ * prendido que apagado y la pantalla de Cobros parecía "no responder".
+ *
+ * Mantiene la API (checked / onCheckedChange) para no tocar a los callers.
+ */
+export function Switch({
+  checked,
+  onCheckedChange,
+  disabled = false,
+}: {
+  checked: boolean;
+  onCheckedChange: (checked: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
-    <SwitchPrimitive.Root
-      data-slot="switch"
-      data-size={size}
-      className={cn(
-        "peer group/switch relative inline-flex shrink-0 items-center rounded-full border border-transparent transition-all outline-none after:absolute after:-inset-x-3 after:-inset-y-2 focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 data-[size=default]:h-[18.4px] data-[size=default]:w-[32px] data-[size=sm]:h-[14px] data-[size=sm]:w-[24px] dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 data-checked:bg-primary data-unchecked:bg-input dark:data-unchecked:bg-input/80 data-disabled:cursor-not-allowed data-disabled:opacity-50",
-        className
-      )}
-      {...props}
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onCheckedChange(!checked)}
+      className="press-fx flex-shrink-0"
+      style={{
+        width: 40,
+        height: 24,
+        border: 0,
+        padding: 2,
+        borderRadius: 999,
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.5 : 1,
+        background: checked ? "var(--ink-1)" : "var(--line)",
+        transition: "background 0.18s",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: checked ? "flex-end" : "flex-start",
+      }}
     >
-      <SwitchPrimitive.Thumb
-        data-slot="switch-thumb"
-        className="pointer-events-none block rounded-full bg-background ring-0 transition-transform group-data-[size=default]/switch:size-4 group-data-[size=sm]/switch:size-3 group-data-[size=default]/switch:data-checked:translate-x-[calc(100%-2px)] group-data-[size=sm]/switch:data-checked:translate-x-[calc(100%-2px)] dark:data-checked:bg-primary-foreground group-data-[size=default]/switch:data-unchecked:translate-x-0 group-data-[size=sm]/switch:data-unchecked:translate-x-0 dark:data-unchecked:bg-foreground"
+      <span
+        className="block w-[20px] h-[20px] rounded-full bg-white"
+        style={{ boxShadow: "0 1px 3px rgba(0,0,0,0.15)" }}
       />
-    </SwitchPrimitive.Root>
-  )
+    </button>
+  );
 }
-
-export { Switch }

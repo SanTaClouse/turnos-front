@@ -3,11 +3,13 @@
 import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
+import { setClientFrequentAction } from "@/app/actions";
 import type { Client, Appointment } from "@/types/api";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
 import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
+import { Switch } from "@/components/ui/switch";
 
 // ─── Helpers ───────────────────────────────────────────────
 function getInitials(name: string): string {
@@ -68,11 +70,12 @@ function enrichClients(clients: Client[], appointments: Appointment[]): Enriched
 }
 
 // ─── Tag pill ──────────────────────────────────────────────
-function TagPill({ tag }: { tag: "vip" | "nuevo" | "inactivo" }) {
+function TagPill({ tag }: { tag: "vip" | "nuevo" | "inactivo" | "frecuente" }) {
   const styles: Record<typeof tag, { bg: string; color: string; label: string }> = {
-    vip:      { bg: "#f9eecb", color: "#8a6a1a", label: "VIP" },
-    nuevo:    { bg: "var(--status-confirmed-bg)", color: "var(--status-confirmed)", label: "NUEVO" },
-    inactivo: { bg: "var(--line-2)", color: "var(--ink-3)", label: "INACTIVO" },
+    vip:       { bg: "#f9eecb", color: "#8a6a1a", label: "VIP" },
+    nuevo:     { bg: "var(--status-confirmed-bg)", color: "var(--status-confirmed)", label: "NUEVO" },
+    inactivo:  { bg: "var(--line-2)", color: "var(--ink-3)", label: "INACTIVO" },
+    frecuente: { bg: "#e3edf9", color: "#2a5d9c", label: "FRECUENTE" },
   };
   const s = styles[tag];
   return (
@@ -111,6 +114,19 @@ function ClientDetail({ client, appointments, onClose }: {
   onClose: () => void;
 }) {
   const [notes, setNotes] = useState(""); // note: Client no tiene notes en backend aún
+  // Frecuente = no se le exige seña al reservar. Optimista con revert.
+  const [frequent, setFrequent] = useState(client.is_frequent ?? false);
+  const [frequentError, setFrequentError] = useState(false);
+  const handleFrequent = async (next: boolean) => {
+    setFrequent(next);
+    setFrequentError(false);
+    try {
+      await setClientFrequentAction(client.id, next);
+    } catch {
+      setFrequent(!next);
+      setFrequentError(true);
+    }
+  };
   const myAppts = appointments
     .filter((a) => a.client_id === client.id)
     .sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time));
@@ -162,6 +178,21 @@ function ClientDetail({ client, appointments, onClose }: {
           label="Próximos"
           accent={!!client.nextAppt}
         />
+      </div>
+
+      {/* Cliente frecuente */}
+      <div className="flex items-center gap-[12px] px-[14px] py-[12px] rounded bg-surface border border-line mb-[18px]">
+        <div className="flex-1 min-w-0">
+          <div className="text-[13px] font-medium text-ink-1">Cliente frecuente</div>
+          <div className="text-[11px] text-ink-3 mt-[2px] leading-[1.4]">
+            Reserva sin pagar seña, aunque tengas la seña obligatoria activada
+            para clientes nuevos.
+          </div>
+          {frequentError && (
+            <div className="text-[11px] text-danger mt-[2px]">No se pudo guardar. Probá de nuevo.</div>
+          )}
+        </div>
+        <Switch checked={frequent} onCheckedChange={handleFrequent} />
       </div>
 
       {/* Notas (placeholder hasta que el backend tenga el campo) */}
@@ -373,8 +404,9 @@ export function ClientesView({
                       <div className="flex-1 min-w-0">
                         <div className="text-[13px] font-medium flex items-center gap-[6px]" style={{ letterSpacing: "-0.2px" }}>
                           <span className="truncate">{c.name}</span>
+                          {c.is_frequent && <TagPill tag="frecuente" />}
                           {c.tags.includes("vip") && <TagPill tag="vip" />}
-                          {c.tags.includes("nuevo") && <TagPill tag="nuevo" />}
+                          {!c.is_frequent && c.tags.includes("nuevo") && <TagPill tag="nuevo" />}
                         </div>
                         <div className="text-[11px] text-ink-3 mt-[2px] flex gap-[8px]">
                           <span className="font-mono">{c.phone}</span>

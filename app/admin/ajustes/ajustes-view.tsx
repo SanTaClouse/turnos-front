@@ -573,17 +573,19 @@ function PaymentsSheet({
   );
   const [allowFull, setAllowFull] = useState(initial?.allow_full ?? false);
   const [allowPayLater, setAllowPayLater] = useState(initial?.allow_pay_later ?? true);
+  const [requireDeposit, setRequireDeposit] = useState(
+    initial?.require_deposit_new_clients ?? false,
+  );
   const [connecting, setConnecting] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const numValue = Number(value);
+  const percentTooBig = depositType === "percent" && numValue > 100;
   const depositValid =
     !allowDeposit ||
-    (Number.isFinite(numValue) &&
-      numValue > 0 &&
-      (depositType !== "percent" || numValue <= 100));
+    (Number.isFinite(numValue) && numValue > 0 && !percentTooBig);
   const anyEnabled = allowDeposit || allowFull || allowPayLater;
   const valid = depositValid && anyEnabled;
 
@@ -619,6 +621,7 @@ function PaymentsSheet({
         deposit_value: allowDeposit ? numValue : undefined,
         allow_full: allowFull,
         allow_pay_later: allowPayLater,
+        require_deposit_new_clients: allowDeposit && requireDeposit,
       });
       onConfigSaved(saved);
       setAllowPayLater(saved.allow_pay_later);
@@ -731,6 +734,28 @@ function PaymentsSheet({
                       {depositType === "percent" ? "%" : currency}
                     </span>
                   </div>
+                  {percentTooBig && (
+                    <p className="text-[11px] text-danger leading-[1.4]">
+                      Un porcentaje no puede ser mayor a 100. Si querés cobrar{" "}
+                      <strong>{currency} {numValue.toLocaleString("es-AR")}</strong> de seña,
+                      elegí «Monto fijo» arriba.
+                    </p>
+                  )}
+
+                  {/* Seña obligatoria para clientes nuevos */}
+                  <div className="flex items-center gap-[12px] pt-[2px]">
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-medium text-ink-1">
+                        Obligatoria para clientes nuevos
+                      </div>
+                      <div className="text-[11px] text-ink-3 mt-[2px] leading-[1.45]">
+                        Los clientes nuevos solo pueden reservar pagando online.
+                        Los que marques como frecuentes en Clientes reservan sin
+                        pagar. Si no pagan en 30 min, el turno se libera solo.
+                      </div>
+                    </div>
+                    <Switch checked={requireDeposit} onCheckedChange={setRequireDeposit} />
+                  </div>
                 </div>
               )}
             </div>
@@ -798,6 +823,74 @@ function ToggleRow({
   );
 }
 
+// ─── Sheet: Agenda inteligente (anti-fragmentación) ────────
+function SmartAgendaSheet({ tenant, onClose, onSaved }: {
+  tenant: Tenant;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [enabled, setEnabled] = useState(tenant.optimize_gaps ?? false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await api.patch(`/tenants/${tenant.id}`, { optimize_gaps: enabled });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar");
+      setSaving(false);
+    }
+  };
+
+  return (
+    <BottomSheet open onClose={onClose} title="Agenda inteligente">
+      <div className="flex flex-col gap-[14px]">
+        <div className="flex items-center gap-[12px] px-[14px] py-[12px] rounded-[12px] border border-line">
+          <div className="flex-1 min-w-0">
+            <div className="text-[14px] font-medium text-ink-1">Optimizar huecos</div>
+            <div className="text-[11px] text-ink-3 mt-[1px]">
+              Evitá turnos que te parten el día
+            </div>
+          </div>
+          <Switch checked={enabled} onCheckedChange={setEnabled} />
+        </div>
+
+        <div className="rounded-[12px] bg-line-2 px-[14px] py-[12px] text-[12px] text-ink-2 leading-[1.55]">
+          <p>
+            <strong>Cómo funciona:</strong> cuando está activado, a tus clientes
+            solo se les ofrecen horarios que no dejan huecos muertos en tu agenda:
+          </p>
+          <ul className="mt-[8px] flex flex-col gap-[6px] list-disc pl-[16px]">
+            <li>
+              Un horario se ofrece si queda <strong>pegado a otro turno</strong>{" "}
+              o al inicio/fin de tu jornada.
+            </li>
+            <li>
+              También si el hueco que deja{" "}
+              <strong>alcanza para tu servicio más corto</strong>, así otro
+              cliente todavía puede tomarlo.
+            </li>
+          </ul>
+          <p className="mt-[8px]">
+            Ejemplo: trabajás de 8:00 a 11:30 y tu servicio dura 1h 30m → se
+            ofrecen <strong>8:00 y 10:00</strong> (el 9:00 no, porque te dejaría
+            1 hora muerta hasta el cierre). Si alguien reserva a las 8:00, el
+            9:30 se habilita solo, porque queda pegado a ese turno.
+          </p>
+        </div>
+
+        {error && <p className="text-[12px] text-danger">{error}</p>}
+        <Btn onClick={handleSave} loading={saving} size="lg" full>
+          Guardar
+        </Btn>
+      </div>
+    </BottomSheet>
+  );
+}
+
 // ─── Main view ─────────────────────────────────────────────
 type SheetType =
   | "info"
@@ -810,6 +903,7 @@ type SheetType =
   | "team"
   | "devices"
   | "payments"
+  | "smartgrid"
   | null;
 
 export function AjustesView({
@@ -933,6 +1027,17 @@ export function AjustesView({
           />
           <Divider />
           <SectionRow
+            icon="calendar"
+            title="Agenda inteligente"
+            subtitle={
+              tenant.optimize_gaps
+                ? "Optimizar huecos: activado"
+                : "Solo ofrecer horarios sin huecos muertos"
+            }
+            onClick={() => setOpenSheet("smartgrid")}
+          />
+          <Divider />
+          <SectionRow
             icon="lock"
             title="Bloqueos"
             subtitle="Feriados, vacaciones, franjas no disponibles"
@@ -1051,6 +1156,9 @@ export function AjustesView({
           onClose={() => setOpenSheet(null)}
           onChanged={setSessions}
         />
+      )}
+      {openSheet === "smartgrid" && (
+        <SmartAgendaSheet tenant={tenant} onClose={() => setOpenSheet(null)} onSaved={handleSaved} />
       )}
       {openSheet === "payments" && (
         <PaymentsSheet

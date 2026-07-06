@@ -860,8 +860,8 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
         {/* Servicio */}
         <div>
           <label className="text-[12px] font-medium text-ink-2 block mb-[6px]">Servicio</label>
-          <div className="flex flex-col gap-[6px]">
-            {services.slice(0, 4).map((s) => (
+          <div className="flex flex-col gap-[6px] max-h-[220px] overflow-y-auto hide-scroll">
+            {services.map((s) => (
               <button
                 key={s.id}
                 onClick={() => setSelectedService(s)}

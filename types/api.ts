@@ -21,6 +21,10 @@ export interface Tenant {
   deposit_value?: number | string;
   allow_full?: boolean;
   allow_pay_later?: boolean;
+  /** Seña obligatoria para clientes nuevos (los frecuentes quedan exentos). */
+  require_deposit_new_clients?: boolean;
+  /** Anti-fragmentación: solo ofrecer horarios que no dejan huecos muertos. */
+  optimize_gaps?: boolean;
   /** Solo presente en la respuesta de POST /tenants si se envió email. */
   session_token?: string;
 }
@@ -34,7 +38,22 @@ export interface PaymentSettings {
   deposit_value: number;
   allow_full: boolean;
   allow_pay_later: boolean;
+  require_deposit_new_clients: boolean;
   currency: string;
+}
+
+/** Opciones de pago de UN turno (GET /payments/checkout-options). */
+export interface CheckoutOptions {
+  /** true → el cliente debe pagar online para confirmar (sin "pagar en el local"). */
+  payment_required: boolean;
+  currency: string;
+  deposit_type: "percent" | "fixed";
+  deposit_value: number;
+  appointment_status: string;
+  options: Array<{
+    kind: "deposit" | "full" | "pay_later";
+    amount: number | null;
+  }>;
 }
 
 /** Estado de un cobro de seña/pago (GET /payments/booking-status). */
@@ -125,6 +144,8 @@ export interface Client {
   email: string | null;
   picture: string | null;
   created_at: string;
+  /** Frecuente PARA este tenant: no se le exige seña al reservar. */
+  is_frequent?: boolean;
 }
 
 export interface Appointment {
