@@ -205,7 +205,7 @@ export function PagoView({ slug, tenant }: { slug: string; tenant: Tenant }) {
       <div className="flex-1 overflow-y-auto hide-scroll px-[24px] pt-[28px] pb-[24px]">
         {/* Marca + título */}
         <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex flex-col items-center">
-          <BrandMark initials={confirmed.tenantInitials} size={56} />
+          <BrandMark initials={confirmed.tenantInitials} imageUrl={tenant.logo_url} size={56} />
           <div className="font-serif text-[26px] leading-[1.15] text-center mt-[18px] text-balance" style={{ letterSpacing: "-0.5px" }}>
             {single ? "Reservá tu lugar" : "¿Cómo querés reservar?"}
           </div>

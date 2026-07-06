@@ -82,6 +82,7 @@ export interface BookingPaymentStatus {
     client_email: string | null;
     tenant_name: string | null;
     tenant_address: string | null;
+    tenant_logo_url: string | null;
   } | null;
 }
 

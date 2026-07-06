@@ -266,6 +266,7 @@ function SuccessContent({ params }: { params: { slug: string } }) {
           tenantName: a.tenant_name ?? "",
           tenantAddress: a.tenant_address,
           tenantInitials: initialsFrom(a.tenant_name ?? ""),
+          tenantLogoUrl: a.tenant_logo_url,
           countryCode: "+54",
           confirmedAt: new Date().toISOString(),
           serviceId: null,
@@ -362,7 +363,7 @@ function SuccessContent({ params }: { params: { slug: string } }) {
         >
           {/* Header del ticket */}
           <div className="flex items-center gap-[12px] px-[18px] py-[16px] border-b border-dashed border-line">
-            <BrandMark initials={confirmed.tenantInitials} size={36} />
+            <BrandMark initials={confirmed.tenantInitials} imageUrl={confirmed.tenantLogoUrl} size={36} />
             <div className="flex-1 min-w-0">
               <div className="text-[14px] font-semibold" style={{ letterSpacing: "-0.2px" }}>{confirmed.tenantName}</div>
               {confirmed.tenantAddress && (

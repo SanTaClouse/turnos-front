@@ -625,7 +625,7 @@ export function BookingFlow({ tenant, services, resources, availableDaysOfWeek, 
         notes: store.notes || undefined,
         source: "web",
       });
-      store.confirm(appt.id, tenant.name, tenant.address, initials, countryCode);
+      store.confirm(appt.id, tenant.name, tenant.address, initials, tenant.logo_url, countryCode);
       // Si el negocio ofrece pago online (seña o completo), pasamos por el paso
       // de pago para que el cliente elija. Si no, directo al ticket.
       const hasOnlinePayment = !!tenant.allow_deposit || !!tenant.allow_full;
@@ -659,7 +659,7 @@ export function BookingFlow({ tenant, services, resources, availableDaysOfWeek, 
             <Icon name="back" size={20} color="var(--ink-1)" />
           </button>
           <div className="flex items-center gap-[10px] flex-1 min-w-0">
-            <BrandMark initials={initials} size={30} />
+            <BrandMark initials={initials} imageUrl={tenant.logo_url} size={30} />
             <div className="min-w-0">
               <div className="text-[13px] font-semibold" style={{ letterSpacing: "-0.2px", lineHeight: 1.1 }}>
                 {tenant.name}

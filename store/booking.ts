@@ -24,6 +24,7 @@ export interface ConfirmedSnapshot extends BookingChoice {
   tenantName: string;
   tenantAddress: string | null;
   tenantInitials: string;
+  tenantLogoUrl: string | null;
   countryCode: string;
   confirmedAt: string;
   // Pago de seña/total (si el tenant lo cobra). Se completa al acreditarse.
@@ -43,7 +44,7 @@ interface BookingStore extends BookingChoice {
   setDetails: (name: string, phone: string, email: string, notes: string) => void;
   nextStep: () => void;
   goToStep: (step: number) => void;
-  confirm: (appointmentId: string, tenantName: string, tenantAddress: string | null, tenantInitials: string, countryCode?: string) => void;
+  confirm: (appointmentId: string, tenantName: string, tenantAddress: string | null, tenantInitials: string, tenantLogoUrl: string | null, countryCode?: string) => void;
   setPaymentResult: (info: { depositAmount: number; depositKind: "deposit" | "full"; currency: string; paid: boolean }) => void;
   resetFlow: () => void;
   reset: () => void;
@@ -110,7 +111,7 @@ export const useBookingStore = create<BookingStore>()(
 
       goToStep: (step) => set({ step }),
 
-      confirm: (appointmentId, tenantName, tenantAddress, tenantInitials, countryCode = "+54") => {
+      confirm: (appointmentId, tenantName, tenantAddress, tenantInitials, tenantLogoUrl, countryCode = "+54") => {
         const s = get();
         // Solo seteamos `confirmed` — NO reseteamos el flow acá.
         // Si reseteamos sincrónicamente, el componente BookingFlow re-renderiza
@@ -125,6 +126,7 @@ export const useBookingStore = create<BookingStore>()(
             tenantName,
             tenantAddress,
             tenantInitials,
+            tenantLogoUrl,
             countryCode,
             confirmedAt: new Date().toISOString(),
             serviceId: s.serviceId,
