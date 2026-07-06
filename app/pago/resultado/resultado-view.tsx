@@ -42,7 +42,7 @@ export function ResultadoView({ bp, slug }: { bp: string; slug: string }) {
           setView("approved");
           // Pequeña pausa para que se vea el check antes de ir al ticket.
           setTimeout(() => {
-            if (!cancelled && slug) router.replace(`/${slug}/reservar/ok`);
+            if (!cancelled && slug) router.replace(`/${slug}/reservar/ok?bp=${bp}`);
           }, 1600);
           return;
         }
@@ -103,7 +103,7 @@ export function ResultadoView({ bp, slug }: { bp: string; slug: string }) {
           </Sub>
           <Actions>
             {slug && (
-              <Btn size="lg" full onClick={() => router.replace(`/${slug}/reservar/ok`)}>
+              <Btn size="lg" full onClick={() => router.replace(`/${slug}/reservar/ok?bp=${bp}`)}>
                 Ver mi turno
               </Btn>
             )}
@@ -122,7 +122,7 @@ export function ResultadoView({ bp, slug }: { bp: string; slug: string }) {
                 <Btn size="lg" full onClick={() => router.replace(`/${slug}/reservar/pago`)}>
                   Reintentar el pago
                 </Btn>
-                <Btn variant="ghost" size="lg" full onClick={() => router.replace(`/${slug}/reservar/ok`)}>
+                <Btn variant="ghost" size="lg" full onClick={() => router.replace(`/${slug}/reservar/ok?bp=${bp}`)}>
                   Ver mi turno sin pagar
                 </Btn>
               </>
@@ -139,7 +139,7 @@ export function ResultadoView({ bp, slug }: { bp: string; slug: string }) {
           <Actions>
             {slug ? (
               <>
-                <Btn size="lg" full onClick={() => router.replace(`/${slug}/reservar/ok`)}>
+                <Btn size="lg" full onClick={() => router.replace(`/${slug}/reservar/ok?bp=${bp}`)}>
                   Ver mi turno
                 </Btn>
                 <Btn variant="ghost" size="lg" full onClick={() => router.replace(`/${slug}/reservar/pago`)}>

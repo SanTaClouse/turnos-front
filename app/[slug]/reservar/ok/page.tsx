@@ -1,12 +1,25 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
+import { api } from "@/lib/api";
 import { useBookingStore } from "@/store/booking";
+import type { ConfirmedSnapshot } from "@/store/booking";
+import type { BookingPaymentStatus } from "@/types/api";
 import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
 import { BrandMark } from "@/components/ui/brand-mark";
+
+function initialsFrom(name: string): string {
+  return name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+}
 
 // ─── Helpers ───────────────────────────────────────────────
 function formatDate(dateStr: string) {
@@ -203,9 +216,19 @@ function TicketLoading() {
 }
 
 // ─── Page ──────────────────────────────────────────────────
+// useSearchParams necesita un límite de Suspense para no romper el build.
 export default function SuccessPage({ params }: { params: { slug: string } }) {
+  return (
+    <Suspense fallback={<TicketLoading />}>
+      <SuccessContent params={params} />
+    </Suspense>
+  );
+}
+
+function SuccessContent({ params }: { params: { slug: string } }) {
   const router = useRouter();
-  const confirmed = useBookingStore((s) => s.confirmed);
+  const bp = useSearchParams().get("bp");
+  const storeConfirmed = useBookingStore((s) => s.confirmed);
   const [calOpen, setCalOpen] = useState(false);
 
   // Zustand persist hidrata async desde localStorage. Antes de saber si hay
@@ -222,6 +245,58 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
     return unsub;
   }, [hydrated]);
 
+  // Fallback robusto: si no hay snapshot local pero llegamos con ?bp= (vuelta
+  // del pago), reconstruimos el ticket desde el backend. Cubre el caso iOS
+  // donde la app de Mercado Pago devuelve en OTRO contexto de navegador, sin
+  // acceso al localStorage donde se guardó el `confirmed`.
+  const [remote, setRemote] = useState<ConfirmedSnapshot | null>(null);
+  const [remoteLoading, setRemoteLoading] = useState(false);
+  useEffect(() => {
+    if (!hydrated || storeConfirmed || !bp) return;
+    let alive = true;
+    setRemoteLoading(true);
+    api
+      .get<BookingPaymentStatus>(`/payments/booking-status?bp=${bp}`)
+      .then((data) => {
+        if (!alive || !data.appointment) return;
+        const a = data.appointment;
+        const paid = data.status === "approved";
+        setRemote({
+          appointmentId: a.id,
+          tenantName: a.tenant_name ?? "",
+          tenantAddress: a.tenant_address,
+          tenantInitials: initialsFrom(a.tenant_name ?? ""),
+          countryCode: "+54",
+          confirmedAt: new Date().toISOString(),
+          serviceId: null,
+          serviceName: a.service_name,
+          serviceDuration: a.service_duration,
+          servicePrice: null,
+          date: a.date,
+          time: a.time,
+          resourceId: null,
+          resourceName: a.resource_name,
+          clientName: a.client_name ?? "",
+          clientPhone: "",
+          clientEmail: a.client_email ?? "",
+          notes: "",
+          depositAmount: paid ? data.amount : null,
+          depositKind: data.kind,
+          depositCurrency: data.currency,
+          paid,
+        });
+      })
+      .catch(() => {})
+      .finally(() => {
+        if (alive) setRemoteLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [hydrated, storeConfirmed, bp]);
+
+  const confirmed = storeConfirmed ?? remote;
+
   // Una vez mostrado el ticket, limpiamos el flow del booking (step,
   // servicio, fecha, hora) para que si el usuario vuelve a /reservar
   // —vía "Reservar otro turno" o el botón back— arranque limpio.
@@ -231,9 +306,10 @@ export default function SuccessPage({ params }: { params: { slug: string } }) {
     useBookingStore.getState().resetFlow();
   }, [hydrated]);
 
-  if (!hydrated) return <TicketLoading />;
+  // Skeleton mientras hidrata o mientras traemos el turno del backend.
+  if (!hydrated || (!confirmed && bp && remoteLoading)) return <TicketLoading />;
 
-  // Si ya hidrató y no hay datos confirmados, mostrar fallback
+  // Si ya hidrató y no hay datos confirmados (ni local ni remoto), fallback.
   if (!confirmed) {
     return (
       <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-[20px] text-center gap-[16px]">

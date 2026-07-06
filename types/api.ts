@@ -69,6 +69,20 @@ export interface BookingPaymentStatus {
   currency: string;
   appointment_status: string | null;
   appointment_payment_status: string | null;
+  /** Datos del turno para reconstruir el ticket sin depender del localStorage. */
+  appointment: {
+    id: string;
+    date: string;
+    time: string;
+    end_time: string;
+    service_name: string | null;
+    service_duration: number | null;
+    resource_name: string | null;
+    client_name: string | null;
+    client_email: string | null;
+    tenant_name: string | null;
+    tenant_address: string | null;
+  } | null;
 }
 
 export interface AdminSession {
