@@ -23,6 +23,32 @@ const trackStartOnboarding = (ctaPosition: "hero" | "mid" | "final") => {
 // Mobile-first, scrolleable, max 430px de ancho.
 // ════════════════════════════════════════════════════════════
 
+const EASE = [0.22, 1, 0.36, 1] as const;
+
+// Fade + rise al entrar en viewport. Una sola vez, para que el
+// scroll hacia arriba no re-anime todo.
+function Reveal({
+  children,
+  delay = 0,
+  className,
+}: {
+  children: React.ReactNode;
+  delay?: number;
+  className?: string;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 22 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, amount: 0.2, margin: "0px 0px -40px 0px" }}
+      transition={{ duration: 0.55, delay, ease: EASE }}
+      className={className}
+    >
+      {children}
+    </motion.div>
+  );
+}
+
 export function EmpezarView() {
   return (
     <div
@@ -34,7 +60,6 @@ export function EmpezarView() {
 
       <main className="px-[20px] pb-[120px]">
         <Hero />
-        <PizzaPitch />
         <MockupSection
           eyebrow="01 · Tu link público"
           title={
@@ -74,11 +99,12 @@ export function EmpezarView() {
               </em>.
             </>
           }
-          copy="Cada profesional con su color. Los solapamientos se acomodan solos. La línea de la hora actual te dice dónde estás."
+          copy="Cada profesional con su color. La línea de la hora actual te dice dónde estás."
           mock={<MockAgenda />}
         />
 
         <Beneficios />
+        <PizzaPitch />
         <Pricing />
         <FAQ />
         <FinalCTA />
@@ -113,7 +139,7 @@ function FloatingWhatsApp() {
         <motion.div
           initial={{ opacity: 0, x: 10 }}
           animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: 0.3, ease: EASE }}
           className="relative bg-surface border border-line rounded-[14px] py-[8px] pl-[12px] pr-[28px] shadow-fab"
           style={{ maxWidth: 220 }}
         >
@@ -189,14 +215,22 @@ function PromoBar() {
 function Hero() {
   return (
     <section className="pt-[36px] pb-[24px]">
-      <div className="flex items-center gap-[8px] mb-[18px]">
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: EASE }}
+        className="flex items-center gap-[8px] mb-[18px]"
+      >
         <BrandMark initials="T" size={32} />
         <span className="font-mono text-[11px] text-ink-3 tracking-[0.06em]">
           TURNO1MIN
         </span>
-      </div>
+      </motion.div>
 
-      <h1
+      <motion.h1
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, delay: 0.08, ease: EASE }}
         className="font-serif text-[44px] leading-[1.02] text-balance"
         style={{ letterSpacing: "-1px" }}
       >
@@ -205,17 +239,25 @@ function Hero() {
           reservas online
         </em>{" "}
         en 5 minutos.
-      </h1>
+      </motion.h1>
 
-      <p
+      <motion.p
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, delay: 0.16, ease: EASE }}
         className="mt-[16px] text-[15px] text-ink-2 leading-[1.55]"
         style={{ maxWidth: 360 }}
       >
         Sin contestar más &quot;¿tenés turno mañana?&quot; por WhatsApp.
         Tus clientes reservan solos, vos sólo confirmás.
-      </p>
+      </motion.p>
 
-      <div className="mt-[24px] flex flex-col gap-[10px]">
+      <motion.div
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.55, delay: 0.24, ease: EASE }}
+        className="mt-[24px] flex flex-col gap-[10px]"
+      >
         <Link href="/onboarding" className="w-full" onClick={() => trackStartOnboarding("hero")}>
           <Btn variant="primary" size="lg" full className="gap-2">
             Crear mi negocio gratis
@@ -225,7 +267,7 @@ function Hero() {
         <p className="font-mono text-[11px] text-ink-3 text-center">
           30 clientes gratis · Sin tarjeta · Cancelás cuando quieras
         </p>
-      </div>
+      </motion.div>
     </section>
   );
 }
@@ -234,10 +276,7 @@ function Hero() {
 function PizzaPitch() {
   return (
     <section className="py-[24px] my-[12px]">
-      <div
-        className="relative rounded-lg border border-line bg-surface p-[22px_20px]"
-        style={{ overflow: "hidden" }}
-      >
+      <Reveal className="relative rounded-lg border border-line bg-surface p-[22px_20px] overflow-hidden">
         <div className="label-mono mb-[12px]">El trato</div>
         <p
           className="font-serif text-[24px] leading-[1.15] text-balance"
@@ -266,7 +305,7 @@ function PizzaPitch() {
             GRATIS hasta 30 clientes
           </span>
         </div>
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -285,24 +324,26 @@ function MockupSection({
 }) {
   return (
     <section className="py-[40px]">
-      <div className="label-mono mb-[10px]">{eyebrow}</div>
-      <h2
-        className="font-serif text-[32px] leading-[1.05] text-balance"
-        style={{ letterSpacing: "-0.6px" }}
-      >
-        {title}
-      </h2>
-      <p
-        className="mt-[12px] text-[14px] text-ink-2 leading-[1.5]"
-        style={{ maxWidth: 360 }}
-      >
-        {copy}
-      </p>
+      <Reveal>
+        <div className="label-mono mb-[10px]">{eyebrow}</div>
+        <h2
+          className="font-serif text-[32px] leading-[1.05] text-balance"
+          style={{ letterSpacing: "-0.6px" }}
+        >
+          {title}
+        </h2>
+        <p
+          className="mt-[12px] text-[14px] text-ink-2 leading-[1.5]"
+          style={{ maxWidth: 360 }}
+        >
+          {copy}
+        </p>
+      </Reveal>
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.3 }}
-        transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        initial={{ opacity: 0, y: 28, scale: 0.98 }}
+        whileInView={{ opacity: 1, y: 0, scale: 1 }}
+        viewport={{ once: true, amount: 0.25 }}
+        transition={{ duration: 0.7, ease: EASE }}
         className="mt-[28px]"
       >
         <PhoneFrame>{mock}</PhoneFrame>
@@ -695,7 +736,7 @@ function Beneficios() {
     {
       icon: "clock",
       title: "Onboarding en 5 minutos",
-      copy: "Cargás tus servicios, profesionales y horarios. Listo. Estás online.",
+      copy: "Creas tu negocio en la app en un toque. Cargás tus servicios, profesionales y horarios. Listo. Estás online.",
     },
     {
       icon: "whatsapp",
@@ -712,23 +753,30 @@ function Beneficios() {
       title: "Sin app que descargar",
       copy: "Tus clientes abren el link y reservan. Vos podés instalarla como app si querés.",
     },
+    {
+      icon: "shield",
+      title: "Señas por Mercado Pago",
+      copy: "Conectás tu cuenta y el cliente paga la seña al reservar. La plata va directo a tu Mercado Pago. Chau turnos fantasma.",
+    },
   ];
 
   return (
     <section className="py-[36px]">
-      <div className="label-mono mb-[10px]">Lo que hace</div>
-      <h2
-        className="font-serif text-[28px] leading-[1.1] text-balance"
-        style={{ letterSpacing: "-0.5px" }}
-      >
-        Todo lo que necesitás.<br />
-        Nada que no.
-      </h2>
+      <Reveal>
+        <div className="label-mono mb-[10px]">Lo que hace</div>
+        <h2
+          className="font-serif text-[28px] leading-[1.1] text-balance"
+          style={{ letterSpacing: "-0.5px" }}
+        >
+          Todo lo que necesitás.<br />
+        </h2>
+      </Reveal>
 
       <div className="mt-[20px] flex flex-col gap-[10px]">
-        {items.map((b) => (
-          <div
+        {items.map((b, i) => (
+          <Reveal
             key={b.title}
+            delay={i * 0.06}
             className="bg-surface border border-line rounded p-[14px] flex gap-[12px]"
           >
             <div
@@ -744,7 +792,7 @@ function Beneficios() {
                 {b.copy}
               </div>
             </div>
-          </div>
+          </Reveal>
         ))}
       </div>
     </section>
@@ -755,16 +803,22 @@ function Beneficios() {
 function Pricing() {
   return (
     <section className="py-[36px]">
-      <div className="label-mono mb-[10px]">Precio</div>
-      <h2
-        className="font-serif text-[28px] leading-[1.1] text-balance"
-        style={{ letterSpacing: "-0.5px" }}
-      >
-        Probás gratis.<br />
-        Si no te gusta, te vas.
-      </h2>
+      <Reveal>
+        <div className="label-mono mb-[10px]">Precio</div>
+        <h2
+          className="font-serif text-[28px] leading-[1.1] text-balance"
+          style={{ letterSpacing: "-0.5px" }}
+        >
+          Probás gratis.<br />
+          Si no te gusta, te vas.
+        </h2>
+      </Reveal>
 
-      <div
+      <motion.div
+        initial={{ opacity: 0, y: 26, scale: 0.98 }}
+        whileInView={{ opacity: 1, y: 0, scale: 1 }}
+        viewport={{ once: true, amount: 0.2 }}
+        transition={{ duration: 0.6, ease: EASE }}
         className="mt-[20px] rounded-lg border-2 p-[20px] relative overflow-hidden"
         style={{
           background: "var(--ink-1)",
@@ -797,6 +851,7 @@ function Pricing() {
             "Sin tarjeta de crédito",
             "Reservas ilimitadas mientras estés en prueba",
             "Todos los profesionales que quieras",
+            "Cobro de señas por Mercado Pago",
             "Cancelás cuando quieras",
           ].map((t) => (
             <div key={t} className="flex items-center gap-[8px] text-[12px]">
@@ -826,7 +881,7 @@ function Pricing() {
             <Icon name="forward" size={14} color="var(--ink-1)" />
           </button>
         </Link>
-      </div>
+      </motion.div>
     </section>
   );
 }
@@ -835,7 +890,7 @@ function Pricing() {
 const FAQ_ITEMS: { q: string; a: string }[] = [
   {
     q: "¿Necesito tarjeta de crédito para empezar?",
-    a: "No. Crear tu cuenta y usar la app hasta los 30 primeros clientes es gratis. No pedimos tarjeta ni datos de pago. Recién cuando decidas seguir, te pedimos el medio de pago.",
+    a: "No. Crear tu cuenta y usar la app hasta los 30 primeros clientes es gratis. No pedimos tarjeta ni datos de pago. ",
   },
   {
     q: "¿Y si no me convence? ¿Quedo atado?",
@@ -843,7 +898,7 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
   },
   {
     q: "¿Mis clientes tienen que descargar una app?",
-    a: "No. Abren tu link desde Instagram, WhatsApp o donde lo pongas, y reservan directamente en el navegador. Pueden instalarlo como app si quieren, pero no es obligatorio.",
+    a: "No. Abren tu link desde Instagram, WhatsApp o donde lo pongas, y reservan directamente en el navegador.",
   },
   {
     q: "¿Cuánto tardo en armar mi cuenta?",
@@ -852,6 +907,14 @@ const FAQ_ITEMS: { q: string; a: string }[] = [
   {
     q: "¿Puedo tener varios profesionales?",
     a: "Sí. Podés agregar todos los profesionales o sillones que quieras, cada uno con su color, sus horarios y los servicios que ofrece.",
+  },
+  {
+    q: "¿Puedo cobrar seña cuando reservan?",
+    a: "Sí. Conectás tu cuenta de Mercado Pago y elegís cuánto pedir: un porcentaje o un monto fijo. El cliente paga al reservar y la plata va directo a tu cuenta. Se acabaron los turnos fantasma.",
+  },
+  {
+    q: "¿Me sirve para controlar los ingresos?",
+    a: "Sí. Cada turno queda registrado con su precio, así que ves cuánto entró por día, semana o mes, y cuánto generó cada profesional. Control total de tu negocio, sin planillas.",
   },
   {
     q: "¿Cómo recibo las notificaciones?",
@@ -864,15 +927,17 @@ function FAQ() {
 
   return (
     <section className="py-[36px]">
-      <div className="label-mono mb-[10px]">Preguntas frecuentes</div>
-      <h2
-        className="font-serif text-[28px] leading-[1.1] text-balance"
-        style={{ letterSpacing: "-0.5px" }}
-      >
-        Lo que todos preguntan.
-      </h2>
+      <Reveal>
+        <div className="label-mono mb-[10px]">Preguntas frecuentes</div>
+        <h2
+          className="font-serif text-[28px] leading-[1.1] text-balance"
+          style={{ letterSpacing: "-0.5px" }}
+        >
+          Lo que todos preguntan.
+        </h2>
+      </Reveal>
 
-      <div className="mt-[20px] bg-surface border border-line rounded overflow-hidden">
+      <Reveal delay={0.08} className="mt-[20px] bg-surface border border-line rounded overflow-hidden">
         {FAQ_ITEMS.map((item, i) => {
           const isOpen = open === i;
           return (
@@ -906,7 +971,7 @@ function FAQ() {
                   height: isOpen ? "auto" : 0,
                   opacity: isOpen ? 1 : 0,
                 }}
-                transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
+                transition={{ duration: 0.25, ease: EASE }}
                 style={{ overflow: "hidden" }}
               >
                 <div className="px-[16px] pb-[14px] text-[12px] text-ink-2 leading-[1.5]">
@@ -916,7 +981,7 @@ function FAQ() {
             </div>
           );
         })}
-      </div>
+      </Reveal>
     </section>
   );
 }
@@ -925,25 +990,27 @@ function FAQ() {
 function FinalCTA() {
   return (
     <section className="py-[40px] text-center">
-      <div className="label-mono mb-[14px]">Empezá ahora</div>
-      <h2
-        className="font-serif text-[36px] leading-[1.05] text-balance"
-        style={{ letterSpacing: "-0.8px" }}
-      >
-        Tu próxima reserva,<br />
-        <em className="not-italic" style={{ color: "var(--accent)" }}>
-          en piloto automático
-        </em>
-        .
-      </h2>
-      <p
-        className="mt-[14px] text-[14px] text-ink-2 leading-[1.5] mx-auto"
-        style={{ maxWidth: 320 }}
-      >
-        Probá gratis sin tarjeta. Si no te gusta, listo, te vas. Sin vueltas.
-      </p>
+      <Reveal>
+        <div className="label-mono mb-[14px]">Empezá ahora</div>
+        <h2
+          className="font-serif text-[36px] leading-[1.05] text-balance"
+          style={{ letterSpacing: "-0.8px" }}
+        >
+          Tu próxima reserva,<br />
+          <em className="not-italic" style={{ color: "var(--accent)" }}>
+            en piloto automático
+          </em>
+          .
+        </h2>
+        <p
+          className="mt-[14px] text-[14px] text-ink-2 leading-[1.5] mx-auto"
+          style={{ maxWidth: 320 }}
+        >
+          Probá gratis sin tarjeta. Si no te gusta, listo, te vas. Sin vueltas.
+        </p>
+      </Reveal>
 
-      <div className="mt-[28px]">
+      <Reveal delay={0.1} className="mt-[28px]">
         <Link href="/onboarding" onClick={() => trackStartOnboarding("final")}>
           <Btn variant="primary" size="lg" full className="gap-2">
             Crear mi negocio
@@ -953,7 +1020,7 @@ function FinalCTA() {
         <p className="font-mono text-[11px] text-ink-3 mt-[10px]">
           30 clientes gratis · Sin tarjeta · 5 minutos
         </p>
-      </div>
+      </Reveal>
 
       <div className="mt-[24px]">
         <Link
