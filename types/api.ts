@@ -33,6 +33,11 @@ export interface Tenant {
 export interface PaymentSettings {
   connected: boolean;
   mp_user_id: string | null;
+  /** Nickname/email de la cuenta de MP conectada (para verificar cuál es). */
+  mp_nickname: string | null;
+  mp_email: string | null;
+  /** true → la cuenta conectada es un usuario de PRUEBA de MP: pagos reales fallan. */
+  mp_test_account: boolean;
   allow_deposit: boolean;
   deposit_type: "percent" | "fixed";
   deposit_value: number;

@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter_Tight, Instrument_Serif, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
-import { PWAInstallPrompt } from "@/components/ui/pwa-install-prompt";
 import { MetaPixelProvider } from "@/components/providers/MetaPixelProvider";
 import { Providers } from "./providers";
 
@@ -62,7 +61,10 @@ export const metadata: Metadata = {
     index: true,
     follow: true,
   },
-  manifest: "/manifest.json",
+  // OJO: el manifest NO va acá. Declararlo en el layout raíz hacía instalable
+  // TODO el sitio y Chrome les ofrecía "Instalar aplicación" a los CLIENTES
+  // en medio de la reserva. Solo el panel del tenant es instalable — el
+  // manifest se declara en app/admin/layout.tsx.
 };
 
 export const viewport: Viewport = {
@@ -90,10 +92,7 @@ export default function RootLayout({
       </head>
       <body className="bg-bg text-ink-1 antialiased">
         <MetaPixelProvider>
-          <Providers>
-            {children}
-            <PWAInstallPrompt />
-          </Providers>
+          <Providers>{children}</Providers>
         </MetaPixelProvider>
       </body>
     </html>

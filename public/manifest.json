@@ -1,8 +1,9 @@
 {
   "name": "Turno1Min",
   "short_name": "Turno1Min",
-  "description": "Reservá turnos online sin apps, sin esperas. Confirmación inmediata por email y WhatsApp.",
-  "start_url": "/",
+  "description": "Gestioná tu agenda de turnos: reservas, clientes y cobros.",
+  "id": "/",
+  "start_url": "/admin/agenda",
   "scope": "/",
   "display": "standalone",
   "background_color": "#fafaf7",
@@ -11,10 +12,10 @@
   "categories": ["business", "productivity"],
   "shortcuts": [
     {
-      "name": "Reservar turno",
-      "short_name": "Reservar",
-      "description": "Accede rápidamente a hacer una reserva",
-      "url": "/",
+      "name": "Agenda",
+      "short_name": "Agenda",
+      "description": "Ver los turnos del día",
+      "url": "/admin/agenda",
       "icons": [
         {
           "src": "/icon-192.png",

@@ -653,21 +653,38 @@ function PaymentsSheet({
 
         {/* Conexión de Mercado Pago */}
         {connected ? (
-          <div className="flex items-center gap-[12px] px-[14px] py-[12px] rounded-[12px] bg-line-2">
-            <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center flex-shrink-0" style={{ background: MP_CYAN }}>
-              <Icon name="check" size={16} color="#fff" strokeWidth={2.5} />
+          <div>
+            <div className="flex items-center gap-[12px] px-[14px] py-[12px] rounded-[12px] bg-line-2">
+              <div className="w-[34px] h-[34px] rounded-full flex items-center justify-center flex-shrink-0" style={{ background: MP_CYAN }}>
+                <Icon name="check" size={16} color="#fff" strokeWidth={2.5} />
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[14px] font-semibold" style={{ letterSpacing: "-0.2px" }}>Mercado Pago conectado</div>
+                <div className="text-[11px] text-ink-3 mt-[1px] truncate">
+                  {initial?.mp_nickname || initial?.mp_email
+                    ? `Cuenta: ${initial?.mp_nickname ?? ""}${initial?.mp_email ? ` · ${initial.mp_email}` : ""}`
+                    : "Los cobros van directo a tu cuenta"}
+                </div>
+              </div>
+              <button
+                onClick={handleDisconnect}
+                className="press-fx text-[12px] font-medium text-danger flex-shrink-0"
+                style={{ background: "transparent", border: 0, cursor: "pointer" }}
+              >
+                Desconectar
+              </button>
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-[14px] font-semibold" style={{ letterSpacing: "-0.2px" }}>Mercado Pago conectado</div>
-              <div className="text-[11px] text-ink-3 mt-[1px]">Los cobros van directo a tu cuenta</div>
-            </div>
-            <button
-              onClick={handleDisconnect}
-              className="press-fx text-[12px] font-medium text-danger flex-shrink-0"
-              style={{ background: "transparent", border: 0, cursor: "pointer" }}
-            >
-              Desconectar
-            </button>
+            {initial?.mp_test_account && (
+              <div className="flex items-start gap-[8px] px-[14px] py-[10px] mt-[8px] rounded-[10px] text-[12px] leading-[1.5]" style={{ background: "rgba(196,90,60,0.10)", color: "var(--danger)" }}>
+                <Icon name="alert" size={14} color="var(--danger)" className="flex-shrink-0 mt-[2px]" />
+                <span>
+                  Esta es una cuenta de <strong>PRUEBA</strong> de Mercado Pago: los
+                  pagos reales van a fallar. Tocá «Desconectar», cerrá sesión de MP en
+                  el navegador (o usá una ventana de incógnito) y volvé a conectar con
+                  la cuenta real del negocio.
+                </span>
+              </div>
+            )}
           </div>
         ) : (
           <div className="rounded-[12px] border border-line bg-surface p-[16px]">
