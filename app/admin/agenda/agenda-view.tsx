@@ -1249,7 +1249,7 @@ export function AgendaView({ resources, services, tenantId, tenantName, tenantSl
         tenantId={tenantId}
         onEnablePushNotifications={requestPermission}
         isPushEnabled={isSubscribed}
-        rightAction={<StoryShareButton slug={tenantSlug} />}
+        rightAction={<StoryShareButton slug={tenantSlug} timezone={timezone} />}
       />
 
       {/* Date nav + view toggle */}

@@ -1,7 +1,8 @@
 import { ImageResponse } from "next/og";
 import { api } from "@/lib/api";
+import { getFrontendDomain } from "@/lib/config";
 import { loadInstrumentSerif, loadInterTight } from "@/lib/og-fonts";
-import { todayInTimezone, addDays } from "@/lib/timezone-utils";
+import { todayInTimezone } from "@/lib/timezone-utils";
 import type { Tenant } from "@/types/api";
 
 // La disponibilidad cambia con cada reserva: una historia con horarios rancios
@@ -15,8 +16,8 @@ const H = 1920;
 
 // Instagram tapa ~250px arriba (avatar/nombre) y ~250px abajo (barra de
 // respuesta). Todo lo legible tiene que vivir entre medio.
-const SAFE_TOP = 210;
-const SAFE_BOTTOM = 230;
+const SAFE_TOP = 200;
+const SAFE_BOTTOM = 220;
 
 // Tokens del design system (idénticos a globals.css).
 const BG = "#fafaf7";
@@ -25,149 +26,154 @@ const INK_1 = "#0f0f0e";
 const INK_2 = "#52514d";
 const INK_3 = "#8a8984";
 const LINE = "#ebeae3";
+const LINE_2 = "#f4f3ee";
 const ACCENT = "#e8725a";
 
-// Entran 4 chips por fila. 8 = dos filas llenas, que es el máximo que se lee
-// de un vistazo desde el feed.
-const MAX_SLOTS_PER_DAY = 8;
+const DAYS = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MONTHS = [
+  "enero", "febrero", "marzo", "abril", "mayo", "junio",
+  "julio", "agosto", "septiembre", "octubre", "noviembre", "diciembre",
+];
 
-/**
- * Qué chips mostrar y cuántos quedan afuera.
- *
- * Si con el badge "+N más" se pasa de dos filas, mostramos 7 para que el badge
- * entre al final de la segunda; un "+1 más" solo en una tercera fila parece un
- * error de maquetado. Y si sobra exactamente uno, es mejor mostrarlo que
- * anunciarlo.
- */
-function splitSlots(slots: string[]): { shown: string[]; rest: number } {
-  if (slots.length <= MAX_SLOTS_PER_DAY) return { shown: slots, rest: 0 };
-  const shown = slots.slice(0, MAX_SLOTS_PER_DAY - 1);
-  return { shown, rest: slots.length - shown.length };
-}
-
-interface FreeSlots {
-  resourceId: string;
-  name: string;
-  hue: number;
-  slots: string[];
+interface DaySlot {
+  time: string;
+  free: boolean;
 }
 
 /** Tamaño del nombre según largo — nombres largos no rompen el layout. */
 function fitName(name: string): { text: string; size: number } {
   const n = name.trim();
-  if (n.length <= 12) return { text: n, size: 96 };
-  if (n.length <= 18) return { text: n, size: 76 };
-  if (n.length <= 26) return { text: n, size: 60 };
-  return { text: n.slice(0, 26).trimEnd() + "…", size: 60 };
+  if (n.length <= 12) return { text: n, size: 88 };
+  if (n.length <= 18) return { text: n, size: 70 };
+  if (n.length <= 26) return { text: n, size: 56 };
+  return { text: n.slice(0, 26).trimEnd() + "…", size: 56 };
+}
+
+/** "Hoy", "Mañana" o "Viernes 17 de julio". */
+function dayLabel(date: string, today: string): string {
+  const [y, m, d] = date.split("-").map(Number);
+  // Mediodía UTC: evita que el cambio de huso corra el día uno para atrás.
+  const dow = new Date(Date.UTC(y, m - 1, d, 12)).getUTCDay();
+  const full = `${DAYS[dow]} ${d} de ${MONTHS[m - 1]}`;
+
+  if (date === today) return `Hoy · ${full}`;
+  return full;
 }
 
 /**
- * Une los horarios de todos los profesionales en una sola lista.
+ * Alto reservado para la grilla, en px, dentro de la zona segura.
  *
- * Al cliente que mira la historia no le sirve saber de quién es el hueco: le
- * sirve saber a qué hora puede ir. Si dos profesionales tienen libre las 10:00,
- * es UN horario reservable, no dos.
+ * Es 1920 − padding vertical (200+220) − encabezado (~190, con el nombre en su
+ * tamaño más grande) − bloque del sticker (~217) − footer (~114) − el margen
+ * superior de la grilla (36). Conservador a propósito: si la grilla se pasa,
+ * flexbox la desborda por arriba Y por abajo, tapando la fecha y el sticker.
  */
-function mergeSlots(free: FreeSlots[]): string[] {
-  return Array.from(new Set(free.flatMap((r) => r.slots))).sort();
+const GRID_HEIGHT = 920;
+
+/** Borde de SlotRow, arriba + abajo. Suma al alto de cada fila. */
+const ROW_BORDER = 4;
+
+/** Factor de caja de texto de Inter Tight (line-height por defecto de Satori). */
+const LINE_HEIGHT = 1.2;
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, v));
 }
 
-async function getDaySlots(tenantId: string, date: string): Promise<string[]> {
-  const free = await api
-    .get<FreeSlots[]>(`/availability/free?tenantId=${tenantId}&date=${date}`)
-    .catch(() => [] as FreeSlots[]);
-  return mergeSlots(free);
+/**
+ * Cómo dibujar la grilla según cuántos slots tenga la jornada.
+ *
+ * Una agenda con slots de 30min da 20 filas; una de servicios de 2h da 4. La
+ * misma métrica no sirve para las dos, y no se puede recortar con un "+N más"
+ * porque justo esconde turnos reservables. Así que en vez de números mágicos
+ * por tramo, derivamos el tamaño del espacio real: se elige la cantidad de
+ * columnas, y de ahí sale el alto máximo por fila que garantiza que entren
+ * todas.
+ *
+ * La relación alto/fuente sale del propio SlotRow:
+ *   alto = 2*padding + 2*borde + caja del texto (1.2 × fontSize)
+ * Olvidar el borde acá deja las filas de los extremos recortadas.
+ */
+function gridMetrics(count: number): {
+  columns: number;
+  fontSize: number;
+  rowPadding: number;
+  gap: number;
+} {
+  const columns = count <= 10 ? 1 : count <= 28 ? 2 : 3;
+  const rows = Math.ceil(count / columns);
+  const gap = rows <= 6 ? 18 : rows <= 10 ? 12 : 8;
+
+  // Alto máximo por fila que permite que entren todas.
+  const maxRow = (GRID_HEIGHT - (rows - 1) * gap) / rows;
+  const textBudget = maxRow - ROW_BORDER;
+
+  // Invertimos alto = 2p + 1.2f asumiendo un padding proporcionado (p ≈ 0.36f)
+  // → texto+padding ≈ 1.92f. Los clamps evitan tanto texto ilegible como una
+  // fila desproporcionada cuando hay muy pocos horarios.
+  const fontSize = clamp(Math.floor(textBudget / 1.92), 24, 58);
+  const rowPadding = clamp(
+    Math.floor((textBudget - fontSize * LINE_HEIGHT) / 2),
+    6,
+    34,
+  );
+
+  return { columns, fontSize, rowPadding, gap };
 }
 
-function DayCard({ label, slots }: { label: string; slots: string[] }) {
-  const { shown, rest } = splitSlots(slots);
-  const empty = shown.length === 0;
-
+function SlotRow({
+  slot,
+  fontSize,
+  rowPadding,
+}: {
+  slot: DaySlot;
+  fontSize: number;
+  rowPadding: number;
+}) {
   return (
     <div
       style={{
         display: "flex",
-        flexDirection: "column",
-        background: SURFACE,
-        border: `2px solid ${LINE}`,
-        borderRadius: 36,
-        padding: empty ? "36px 40px" : "36px 40px 42px",
+        alignItems: "center",
+        justifyContent: "space-between",
+        // El libre se despega del fondo (blanco + borde acento); el ocupado se
+        // hunde en él. El contraste hace el trabajo sin texto de más.
+        background: slot.free ? SURFACE : LINE_2,
+        border: `2px solid ${slot.free ? ACCENT : "transparent"}`,
+        borderRadius: 999,
+        padding: `${rowPadding}px 34px`,
       }}
     >
       <div
         style={{
           display: "flex",
-          alignItems: "center",
-          gap: 14,
-          marginBottom: empty ? 20 : 30,
+          fontSize,
+          fontWeight: slot.free ? 600 : 400,
+          color: slot.free ? INK_1 : INK_3,
+          letterSpacing: "-1px",
+          // Tachado sólo en el ocupado: se entiende sin leyenda, en cualquier
+          // idioma y a tamaño de feed.
+          textDecoration: slot.free ? "none" : "line-through",
         }}
       >
-        <div style={{ width: 13, height: 13, borderRadius: 99, background: ACCENT }} />
+        {slot.time}
+      </div>
+      {slot.free && (
         <div
           style={{
-            display: "flex",
-            fontSize: 27,
-            fontWeight: 600,
-            letterSpacing: "0.16em",
-            textTransform: "uppercase",
-            color: INK_2,
+            width: fontSize * 0.22,
+            height: fontSize * 0.22,
+            borderRadius: 99,
+            background: ACCENT,
           }}
-        >
-          {label}
-        </div>
-      </div>
-
-      {empty ? (
-        <div style={{ display: "flex", fontSize: 36, color: INK_3 }}>
-          Sin horarios libres
-        </div>
-      ) : (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 18 }}>
-          {shown.map((slot) => (
-            <div
-              key={slot}
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: BG,
-                border: `2px solid ${LINE}`,
-                borderRadius: 999,
-                // Tabular-ish: mismo alto de caja para todos los chips, así la
-                // grilla se lee como una grilla y no como texto suelto.
-                padding: "18px 34px",
-                fontSize: 50,
-                fontWeight: 600,
-                color: INK_1,
-                letterSpacing: "-1.5px",
-              }}
-            >
-              {slot}
-            </div>
-          ))}
-          {rest > 0 && (
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                padding: "18px 20px",
-                fontSize: 36,
-                color: INK_3,
-                letterSpacing: "-0.5px",
-              }}
-            >
-              +{rest} más
-            </div>
-          )}
-        </div>
+        />
       )}
     </div>
   );
 }
 
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: { slug: string } },
 ) {
   const [fonts, inter, tenant] = await Promise.all([
@@ -180,17 +186,27 @@ export async function GET(
     return new Response("Negocio no encontrado", { status: 404 });
   }
 
-  // "Hoy" y "mañana" en la timezone del NEGOCIO, no la del server ni la del
-  // teléfono: un tenant en Buenos Aires no puede ver "hoy" según UTC.
+  // "Hoy" en la timezone del NEGOCIO, no la del server ni la del teléfono: un
+  // tenant en Buenos Aires no puede ver "hoy" según UTC.
   const today = todayInTimezone(tenant.timezone);
-  const tomorrow = addDays(today, 1);
 
-  const [todaySlots, tomorrowSlots] = await Promise.all([
-    getDaySlots(tenant.id, today),
-    getDaySlots(tenant.id, tomorrow),
-  ]);
+  const requested = new URL(req.url).searchParams.get("date");
+  const date = requested && /^\d{4}-\d{2}-\d{2}$/.test(requested) ? requested : today;
 
+  const slots = await api
+    .get<DaySlot[]>(`/availability/day-grid?tenantId=${tenant.id}&date=${date}`)
+    .catch(() => [] as DaySlot[]);
+
+  const freeCount = slots.filter((s) => s.free).length;
   const fitted = fitName(tenant.name);
+  const metrics = gridMetrics(slots.length);
+
+  // Reparte en N columnas manteniendo el orden por columna (la primera
+  // columna es la mañana, la segunda la tarde) — leer de arriba a abajo.
+  const perColumn = Math.ceil(slots.length / metrics.columns);
+  const columns: DaySlot[][] = Array.from({ length: metrics.columns }, (_, i) =>
+    slots.slice(i * perColumn, (i + 1) * perColumn),
+  );
 
   return new ImageResponse(
     (
@@ -205,8 +221,10 @@ export async function GET(
           fontFamily: '"Inter Tight", system-ui, sans-serif',
         }}
       >
-        {/* ── Encabezado: negocio + qué es esto ── */}
-        <div style={{ display: "flex", flexDirection: "column" }}>
+        {/* ── Encabezado ──
+            flexShrink 0 en las tres secciones fijas: si la grilla se pasara de
+            GRID_HEIGHT, que se recorte ella y no aplaste el encabezado. */}
+        <div style={{ display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div
             style={{
               display: "flex",
@@ -215,10 +233,10 @@ export async function GET(
               color: INK_3,
               letterSpacing: "0.16em",
               textTransform: "uppercase",
-              marginBottom: 20,
+              marginBottom: 18,
             }}
           >
-            Turnos libres
+            {freeCount > 0 ? `${freeCount} turnos libres` : "Agenda del día"}
           </div>
           <div
             style={{
@@ -232,23 +250,72 @@ export async function GET(
           >
             {fitted.text}
           </div>
+          <div
+            style={{
+              display: "flex",
+              fontSize: 32,
+              fontWeight: 400,
+              color: INK_2,
+              letterSpacing: "-0.4px",
+              marginTop: 16,
+            }}
+          >
+            {dayLabel(date, today)}
+          </div>
         </div>
 
-        {/* ── Grilla: hoy y mañana ──
-            flex:1 + center reparte el aire sobrante arriba y abajo de la
-            grilla en vez de dejar un hueco muerto entre ella y el sticker. */}
+        {/* ── Grilla del día ──
+            flex:1 + center reparte el aire sobrante arriba y abajo en vez de
+            dejar un hueco muerto contra el sticker. */}
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
             justifyContent: "center",
+            flexDirection: "column",
             flex: 1,
-            gap: 26,
-            marginTop: 40,
+            // minHeight 0 + overflow hidden: sin esto, una grilla más alta que
+            // su caja desborda por arriba y por abajo (justifyContent center
+            // reparte el sobrante hacia los dos lados) y termina tapando la
+            // fecha y el sticker en vez de recortarse.
+            minHeight: 0,
+            overflow: "hidden",
+            marginTop: 36,
           }}
         >
-          <DayCard label="Hoy" slots={todaySlots} />
-          <DayCard label="Mañana" slots={tomorrowSlots} />
+          {slots.length === 0 ? (
+            <div
+              style={{
+                display: "flex",
+                fontSize: 38,
+                color: INK_3,
+              }}
+            >
+              No hay atención este día.
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 16 }}>
+              {columns.map((column, i) => (
+                <div
+                  key={i}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    flex: 1,
+                    gap: metrics.gap,
+                  }}
+                >
+                  {column.map((slot) => (
+                    <SlotRow
+                      key={slot.time}
+                      slot={slot}
+                      fontSize={metrics.fontSize}
+                      rowPadding={metrics.rowPadding}
+                    />
+                  ))}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* ── Zona del sticker de link ──
@@ -260,7 +327,8 @@ export async function GET(
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            paddingTop: 40,
+            flexShrink: 0,
+            paddingTop: 36,
           }}
         >
           <div
@@ -270,7 +338,7 @@ export async function GET(
               fontSize: 44,
               color: INK_2,
               letterSpacing: "-0.8px",
-              marginBottom: 18,
+              marginBottom: 16,
             }}
           >
             <span>Reservá </span>
@@ -284,7 +352,7 @@ export async function GET(
             style={{
               display: "flex",
               width: 620,
-              height: 116,
+              height: 112,
               border: `3px dashed ${LINE}`,
               borderRadius: 24,
             }}
@@ -297,8 +365,9 @@ export async function GET(
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            marginTop: 44,
-            paddingTop: 30,
+            flexShrink: 0,
+            marginTop: 40,
+            paddingTop: 28,
             borderTop: `2px solid ${LINE}`,
           }}
         >
@@ -346,7 +415,9 @@ export async function GET(
               letterSpacing: "-0.3px",
             }}
           >
-            turno1min.app/{tenant.slug}
+            {/* Mismo dominio que copia el sheet al portapapeles: si divergen,
+                el cliente tipea lo que ve y cae en un 404. */}
+            {getFrontendDomain()}/{tenant.slug}
           </div>
         </div>
       </div>
@@ -354,11 +425,9 @@ export async function GET(
     {
       width: W,
       height: H,
-      // El sheet lo lee para avisarle al dueño que la historia saldría vacía
-      // antes de que la publique. La imagen sola no permite saberlo.
-      headers: {
-        "x-slots-total": String(todaySlots.length + tomorrowSlots.length),
-      },
+      // El sheet lo lee para avisarle al dueño que la historia saldría sin
+      // ningún turno reservable antes de que la publique.
+      headers: { "x-free-slots": String(freeCount) },
       fonts: [
         // Inter Tight primero: es la fuente por defecto del contenedor, y sin
         // ella los horarios caen al fallback serif de Satori.
