@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import { todayInTimezone } from "@/lib/timezone-utils";
 import type { BlockedSlot, Resource } from "@/types/api";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
@@ -47,20 +48,21 @@ function fmtDayLine(b: BlockedSlot): string {
   return `${dow} ${day} ${month} · ${b.start_time} - ${b.end_time}`;
 }
 
-function isUpcoming(b: BlockedSlot): boolean {
-  const today = new Date().toISOString().slice(0, 10);
+function isUpcoming(b: BlockedSlot, today: string): boolean {
   const end = b.end_date ?? b.date;
   return end >= today;
 }
 
 interface BloqueosViewProps {
   tenantId: string;
+  timezone: string;
   initialBlocks: BlockedSlot[];
   resources: Resource[];
 }
 
 export function BloqueosView({
   tenantId,
+  timezone,
   initialBlocks,
   resources,
 }: BloqueosViewProps) {
@@ -68,10 +70,11 @@ export function BloqueosView({
   const [creating, setCreating] = useState(false);
 
   const upcoming = useMemo(() => {
+    const today = todayInTimezone(timezone);
     return blocks
-      .filter(isUpcoming)
+      .filter((b) => isUpcoming(b, today))
       .sort((a, b) => (a.date + (a.start_time ?? "")).localeCompare(b.date + (b.start_time ?? "")));
-  }, [blocks]);
+  }, [blocks, timezone]);
 
   const resourceById = useMemo(() => {
     const m = new Map<string, Resource>();

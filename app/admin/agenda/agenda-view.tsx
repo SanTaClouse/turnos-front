@@ -9,6 +9,7 @@ import { usePushNotifications } from "@/lib/use-push-notifications";
 import { isAppointmentPast } from "@/lib/use-notifications-feed";
 import type { Appointment, AvailableSlot, BlockedSlot, Resource, Service } from "@/types/api";
 import { expandFullDayBlocks } from "@/lib/blocked-dates";
+import { todayInTimezone, nowTimeInTimezone, addDays } from "@/lib/timezone-utils";
 import { useAdminStore } from "@/store/admin";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
@@ -19,11 +20,9 @@ import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
 
 // ─── Helpers ───────────────────────────────────────────────
-function formatDateLabel(dateStr: string) {
-  const today = new Date().toISOString().slice(0, 10);
+function formatDateLabel(dateStr: string, today: string) {
   if (dateStr === today) return "Hoy";
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  if (dateStr === tomorrow) return "Mañana";
+  if (dateStr === addDays(today, 1)) return "Mañana";
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   const days = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
@@ -47,15 +46,10 @@ function addMinutes(time: string, mins: number) {
 
 function getWeekDates(fromDate: string): string[] {
   const [y, m, d] = fromDate.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  const dow = date.getDay();
-  const monday = new Date(date);
-  monday.setDate(date.getDate() - ((dow + 6) % 7));
-  return Array.from({ length: 7 }, (_, i) => {
-    const dd = new Date(monday);
-    dd.setDate(monday.getDate() + i);
-    return dd.toISOString().slice(0, 10);
-  });
+  const dow = new Date(y, m - 1, d).getDay(); // 0=Dom … 6=Sáb
+  const mondayOffset = -((dow + 6) % 7); // días hasta el lunes de esa semana
+  const monday = addDays(fromDate, mondayOffset);
+  return Array.from({ length: 7 }, (_, i) => addDays(monday, i));
 }
 
 // ─── Day view timeline — layout proporcional a la duración ─
@@ -138,11 +132,13 @@ function computeOverlapLayout(appts: Appointment[]): Map<string, ApptLayout> {
   return out;
 }
 
-function DayView({ appointments, resources, onOpen, onCreateAt }: {
+function DayView({ appointments, resources, onOpen, onCreateAt, timezone, showNow }: {
   appointments: Appointment[];
   resources: Resource[];
   onOpen: (a: Appointment) => void;
   onCreateAt: (time: string) => void;
+  timezone: string;
+  showNow: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const firstApptRef = useRef<HTMLButtonElement>(null);
@@ -313,16 +309,16 @@ function DayView({ appointments, resources, onOpen, onCreateAt }: {
           );
         })}
 
-        {/* Línea "ahora" */}
-        <NowLine />
+        {/* Línea "ahora" — solo cuando se está viendo el día de hoy */}
+        {showNow && <NowLine timezone={timezone} />}
       </div>
     </div>
   );
 }
 
-function NowLine() {
-  const now = new Date();
-  const mins = now.getHours() * 60 + now.getMinutes() - START_HOUR * 60;
+function NowLine({ timezone }: { timezone: string }) {
+  const [nowHH, nowMM] = nowTimeInTimezone(timezone).split(":").map(Number);
+  const mins = nowHH * 60 + nowMM - START_HOUR * 60;
   if (mins < 0 || mins > TOTAL_MINS) return null;
   const top = mins * PX_PER_MIN;
   return (
@@ -334,13 +330,13 @@ function NowLine() {
 }
 
 // ─── Week view ─────────────────────────────────────────────
-function WeekView({ weekDates, appointments, blockedDates, onDayClick }: {
+function WeekView({ weekDates, appointments, blockedDates, onDayClick, today }: {
   weekDates: string[];
   appointments: Appointment[];
   blockedDates: Set<string>;
   onDayClick: (date: string) => void;
+  today: string;
 }) {
-  const today = new Date().toISOString().slice(0, 10);
   const countByDate = weekDates.reduce<Record<string, number>>((acc, d) => {
     acc[d] = appointments.filter((a) => a.date === d && a.status !== "cancelled").length;
     return acc;
@@ -1037,11 +1033,12 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
 }
 
 // ─── Main: AgendaView ──────────────────────────────────────
-export function AgendaView({ resources, services, tenantId, tenantName }: {
+export function AgendaView({ resources, services, tenantId, tenantName, timezone }: {
   resources: Resource[];
   services: Service[];
   tenantId: string;
   tenantName: string;
+  timezone: string;
 }) {
   const { selectedDate, viewMode, resourceFilter, setDate, shiftDate, setViewMode, setResourceFilter } = useAdminStore();
   const [selectedAppt, setSelectedAppt] = useState<Appointment | null>(null);
@@ -1077,8 +1074,21 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const today = new Date().toISOString().slice(0, 10);
+  // "Hoy" según la zona horaria del NEGOCIO (no la del navegador de quien mira),
+  // igual que el backend. Así a las 23hs en Argentina la agenda sigue mostrando
+  // el día correcto en vez de saltar a mañana (UTC).
+  const today = todayInTimezone(timezone);
   const isToday = selectedDate === today;
+
+  // Al montar, abrir la agenda en "hoy" del negocio. selectedDate no se persiste
+  // (solo viewMode), así que esto define el día inicial en cada carga y corrige
+  // el default del store si el navegador está en otra zona (dueño de viaje).
+  const didInitDate = useRef(false);
+  useEffect(() => {
+    if (didInitDate.current) return;
+    didInitDate.current = true;
+    if (selectedDate !== today) setDate(today);
+  }, [today, selectedDate, setDate]);
 
   // Memoizado: si no, weekDates es nuevo array en cada render → loop infinito
   const weekDates = useMemo(() => getWeekDates(selectedDate), [selectedDate]);
@@ -1148,7 +1158,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
   };
 
   const nextAppt = isToday
-    ? dayAppointments.find((a) => a.status !== "cancelled" && a.time >= new Date().toTimeString().slice(0, 5))
+    ? dayAppointments.find((a) => a.status !== "cancelled" && a.time >= nowTimeInTimezone(timezone))
     : null;
 
   // Actions
@@ -1232,7 +1242,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
   return (
     <>
       <AdminHeader
-        title={formatDateLabel(selectedDate)}
+        title={formatDateLabel(selectedDate, today)}
         subtitle={tenantName}
         tenantId={tenantId}
         onEnablePushNotifications={requestPermission}
@@ -1346,6 +1356,8 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
             resources={resources}
             onOpen={setSelectedAppt}
             onCreateAt={openCreate}
+            timezone={timezone}
+            showNow={isToday}
           />
         ) : (
           <WeekView
@@ -1353,6 +1365,7 @@ export function AgendaView({ resources, services, tenantId, tenantName }: {
             appointments={appointments}
             blockedDates={blockedDates}
             onDayClick={(date) => { setDate(date); setViewMode("day"); }}
+            today={today}
           />
         )}
       </div>

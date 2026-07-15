@@ -2,6 +2,7 @@
 
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
+import { addDays, todayLocal } from "@/lib/timezone-utils";
 
 interface AdminStore {
   selectedDate: string;       // YYYY-MM-DD
@@ -14,15 +15,11 @@ interface AdminStore {
   setResourceFilter: (id: string) => void;
 }
 
-function todayStr() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function shiftDateStr(date: string, days: number) {
-  const d = new Date(date + "T00:00:00");
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
-}
+// Default inicial del día seleccionado. Usa la fecha LOCAL del navegador (no UTC),
+// así no salta a "mañana" de noche. AgendaView la reconcilia en el montaje a la
+// fecha de hoy en la zona horaria del negocio (tenant.timezone), que es la
+// fuente de verdad final.
+const todayStr = todayLocal;
 
 // Nota: tenantId se removió de este store. La fuente de verdad del tenant
 // es la cookie httpOnly de sesión, leída en server components vía
@@ -35,7 +32,7 @@ export const useAdminStore = create<AdminStore>()(
       resourceFilter: "all",
 
       setDate: (selectedDate) => set({ selectedDate }),
-      shiftDate: (days) => set((s) => ({ selectedDate: shiftDateStr(s.selectedDate, days) })),
+      shiftDate: (days) => set((s) => ({ selectedDate: addDays(s.selectedDate, days) })),
       setViewMode: (viewMode) => set({ viewMode }),
       setResourceFilter: (resourceFilter) => set({ resourceFilter }),
     }),

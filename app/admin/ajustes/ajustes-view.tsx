@@ -13,6 +13,7 @@ import {
   updatePaymentOptionsAction,
 } from "@/app/actions";
 import { getFrontendDomain } from "@/lib/config";
+import { COUNTRY_OPTIONS, countryByTimezone } from "@/lib/timezone-utils";
 import type { Tenant, AdminSession, PaymentSettings } from "@/types/api";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
@@ -908,6 +909,90 @@ function SmartAgendaSheet({ tenant, onClose, onSaved }: {
   );
 }
 
+// ─── Sheet: Zona horaria y moneda (región) ─────────────────
+function RegionSheet({ tenant, onClose, onSaved }: {
+  tenant: Tenant;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  // Preseleccionar el país cuya zona coincide con la guardada. Si la zona actual
+  // no está en la lista, arrancamos en Argentina pero mostramos la zona real.
+  const current = countryByTimezone(tenant.timezone);
+  const [code, setCode] = useState(current?.code ?? "AR");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const selected = COUNTRY_OPTIONS.find((c) => c.code === code) ?? COUNTRY_OPTIONS[0];
+  const dirty = selected.timezone !== tenant.timezone || selected.currency !== tenant.currency;
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      await api.patch(`/tenants/${tenant.id}`, {
+        timezone: selected.timezone,
+        currency: selected.currency,
+        locale: selected.locale,
+      });
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <BottomSheet open onClose={onClose} title="Zona horaria y moneda">
+      <div className="flex flex-col gap-[14px]">
+        <p className="text-[13px] text-ink-2 leading-[1.5]">
+          Define el día y la hora de tu agenda y la moneda de los cobros. Elegí el
+          país donde funciona tu negocio.
+        </p>
+
+        <div>
+          <label className="block text-[12px] font-medium text-ink-2 mb-[6px]">País</label>
+          <select
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className="w-full h-[44px] px-[12px] border border-line bg-surface rounded-sm text-[14px] text-ink-1 outline-none focus-visible:outline-[2px] focus-visible:outline-accent"
+            style={{ fontFamily: "inherit" }}
+          >
+            {COUNTRY_OPTIONS.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.label} · {c.currency}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <div className="bg-bg border border-line rounded-sm p-[12px] flex flex-col gap-[4px]">
+          <div className="flex justify-between text-[12px]">
+            <span className="text-ink-3">Zona horaria</span>
+            <span className="font-mono text-ink-1">{selected.timezone}</span>
+          </div>
+          <div className="flex justify-between text-[12px]">
+            <span className="text-ink-3">Moneda</span>
+            <span className="font-mono text-ink-1">{selected.currency}</span>
+          </div>
+        </div>
+
+        {!current && (
+          <p className="text-[11px] text-ink-3 leading-[1.5] flex items-start gap-[6px]">
+            <Icon name="alert" size={13} color="var(--ink-3)" className="flex-shrink-0 mt-[1px]" />
+            Zona guardada actualmente: <span className="font-mono">{tenant.timezone}</span>
+          </p>
+        )}
+
+        {error && <p className="text-[12px] text-danger">{error}</p>}
+        <Btn onClick={handleSave} loading={saving} disabled={!dirty} size="lg" full className="mt-[6px]">
+          Guardar cambios
+        </Btn>
+      </div>
+    </BottomSheet>
+  );
+}
+
 // ─── Main view ─────────────────────────────────────────────
 type SheetType =
   | "info"
@@ -921,6 +1006,7 @@ type SheetType =
   | "devices"
   | "payments"
   | "smartgrid"
+  | "region"
   | null;
 
 export function AjustesView({
@@ -1036,6 +1122,13 @@ export function AjustesView({
 
         {/* Grupo: Operación */}
         <Group label="Operación">
+          <SectionRow
+            icon="mapPin"
+            title="Zona horaria y moneda"
+            subtitle={`${countryByTimezone(tenant.timezone)?.label ?? tenant.timezone} · ${tenant.currency}`}
+            onClick={() => setOpenSheet("region")}
+          />
+          <Divider />
           <SectionRow
             icon="clock"
             title="Horarios del negocio"
@@ -1176,6 +1269,9 @@ export function AjustesView({
       )}
       {openSheet === "smartgrid" && (
         <SmartAgendaSheet tenant={tenant} onClose={() => setOpenSheet(null)} onSaved={handleSaved} />
+      )}
+      {openSheet === "region" && (
+        <RegionSheet tenant={tenant} onClose={() => setOpenSheet(null)} onSaved={handleSaved} />
       )}
       {openSheet === "payments" && (
         <PaymentsSheet

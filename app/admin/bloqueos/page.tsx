@@ -23,6 +23,7 @@ export default async function BloqueosPage() {
   return (
     <BloqueosView
       tenantId={tenantId}
+      timezone={session.tenant.timezone}
       initialBlocks={blocked}
       resources={resources.filter((r) => r.is_active)}
     />

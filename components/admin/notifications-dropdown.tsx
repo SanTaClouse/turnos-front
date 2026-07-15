@@ -7,6 +7,7 @@ import type { Appointment } from "@/types/api";
 import { Icon } from "@/components/ui/icon";
 import { StatusPill, SourcePill } from "@/components/ui/status-pill";
 import { isAppointmentPast } from "@/lib/use-notifications-feed";
+import { todayLocal, addDays } from "@/lib/timezone-utils";
 
 interface NotificationsDropdownProps {
   open: boolean;
@@ -302,10 +303,9 @@ function NotificationItem({
 }
 
 function formatDateShort(dateStr: string) {
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayLocal();
   if (dateStr === today) return "Hoy";
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
-  if (dateStr === tomorrow) return "Mañana";
+  if (dateStr === addDays(today, 1)) return "Mañana";
   const [y, m, d] = dateStr.split("-").map(Number);
   const date = new Date(y, m - 1, d);
   const days = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];

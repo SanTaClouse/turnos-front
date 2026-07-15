@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { AnimatePresence, motion } from "framer-motion";
 import type { Tenant, Service, Resource, AvailableSlot } from "@/types/api";
 import { useBookingStore } from "@/store/booking";
+import { todayInTimezone, addDays } from "@/lib/timezone-utils";
 import { BrandMark } from "@/components/ui/brand-mark";
 import { Icon } from "@/components/ui/icon";
 import { Btn } from "@/components/ui/btn";
@@ -54,16 +55,12 @@ function addMinutes(time: string, mins: number) {
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
 }
 
-function generateDates(days = 30): string[] {
-  const result: string[] = [];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  for (let i = 0; i < days; i++) {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    result.push(d.toISOString().slice(0, 10));
-  }
-  return result;
+function generateDates(timezone: string, days = 30): string[] {
+  // Arranca en "hoy" según la zona del negocio (igual que el backend filtra los
+  // slots), no la del navegador del cliente. addDays trabaja sobre el calendario,
+  // sin pasar por UTC, así no hay corrimiento de día.
+  const start = todayInTimezone(timezone);
+  return Array.from({ length: days }, (_, i) => addDays(start, i));
 }
 
 // ─── Bubble sub-components ─────────────────────────────────
@@ -143,14 +140,15 @@ function StepServices({ services, locale, currency, onPick }: {
 }
 
 // ─── Step: Fecha ───────────────────────────────────────────
-function StepDate({ tenantId, serviceId, availableDaysOfWeek, blockedDates, onPick }: {
+function StepDate({ tenantId, serviceId, availableDaysOfWeek, blockedDates, onPick, timezone }: {
   tenantId: string;
   serviceId: string;
   availableDaysOfWeek: number[];
   blockedDates: Set<string>;
   onPick: (date: string) => void;
+  timezone: string;
 }) {
-  const dates = generateDates(30);
+  const dates = generateDates(timezone, 30);
   const [offset, setOffset] = useState(0);
   const todayStr = dates[0];
   const visible = dates.slice(offset * 14, offset * 14 + 14);
@@ -713,6 +711,7 @@ export function BookingFlow({ tenant, services, resources, availableDaysOfWeek, 
             availableDaysOfWeek={availableDaysOfWeek}
             blockedDates={blockedSet}
             onPick={handleDate}
+            timezone={tenant.timezone}
           />
         )}
 

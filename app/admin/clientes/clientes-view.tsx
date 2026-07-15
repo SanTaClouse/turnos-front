@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { setClientFrequentAction } from "@/app/actions";
+import { todayInTimezone, nowTimeInTimezone, addDays } from "@/lib/timezone-utils";
 import type { Client, Appointment } from "@/types/api";
 import { AdminHeader } from "@/components/admin/admin-header";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
@@ -28,11 +29,9 @@ function formatShortDate(dateStr: string): string {
   return `${d} ${months[m - 1]}`;
 }
 
-function formatNextLabel(dateStr: string, time: string): string {
-  const today = new Date().toISOString().slice(0, 10);
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+function formatNextLabel(dateStr: string, time: string, today: string): string {
   if (dateStr === today) return `Hoy · ${time}`;
-  if (dateStr === tomorrow) return `Mañana · ${time}`;
+  if (dateStr === addDays(today, 1)) return `Mañana · ${time}`;
   return `${formatShortDate(dateStr)} · ${time}`;
 }
 
@@ -43,9 +42,9 @@ interface EnrichedClient extends Client {
   tags: ("vip" | "nuevo" | "inactivo")[];
 }
 
-function enrichClients(clients: Client[], appointments: Appointment[]): EnrichedClient[] {
-  const today = new Date().toISOString().slice(0, 10);
-  const nowTime = new Date().toTimeString().slice(0, 5);
+function enrichClients(clients: Client[], appointments: Appointment[], timezone: string): EnrichedClient[] {
+  const today = todayInTimezone(timezone);
+  const nowTime = nowTimeInTimezone(timezone);
 
   return clients.map((c) => {
     const myAppts = appointments.filter((a) => a.client_id === c.id && a.status !== "cancelled");
@@ -255,10 +254,12 @@ export function ClientesView({
   initialClients,
   appointments: initialAppointments,
   tenantId,
+  timezone,
 }: {
   initialClients: Client[];
   appointments: Appointment[];
   tenantId: string;
+  timezone: string;
 }) {
   const router = useRouter();
   const [clients, setClients] = useState(initialClients);
@@ -285,8 +286,8 @@ export function ClientesView({
   };
 
   const enriched = useMemo(
-    () => enrichClients(clients, appointments),
-    [clients, appointments],
+    () => enrichClients(clients, appointments, timezone),
+    [clients, appointments, timezone],
   );
 
   const filtered = useMemo(() => {
@@ -418,7 +419,7 @@ export function ClientesView({
                         <div className="text-right flex-shrink-0">
                           <div className="font-mono text-[9px] text-ink-3 uppercase tracking-[0.05em]">Próximo</div>
                           <div className="font-mono text-[11px] text-ink-1 font-medium mt-[2px]">
-                            {formatNextLabel(c.nextAppt.date, c.nextAppt.time)}
+                            {formatNextLabel(c.nextAppt.date, c.nextAppt.time, todayInTimezone(timezone))}
                           </div>
                         </div>
                       )}

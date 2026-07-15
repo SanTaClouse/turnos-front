@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { api } from "@/lib/api";
+import { todayInTimezone } from "@/lib/timezone-utils";
 import type { Appointment, Tenant } from "@/types/api";
 import { Btn } from "@/components/ui/btn";
 import { Icon } from "@/components/ui/icon";
@@ -397,7 +398,7 @@ function ListStage({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [email, tenant.id]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInTimezone(tenant.timezone);
   const active = appointments.filter(
     (a) => a.status !== "cancelled" && a.date >= today,
   );

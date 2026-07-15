@@ -21,6 +21,7 @@ export default async function ClientesPage() {
       initialClients={clients}
       appointments={appointments}
       tenantId={tenantId}
+      timezone={session.tenant.timezone}
     />
   );
 }
