@@ -1,12 +1,15 @@
-// SW v4:
+// SW v5:
 //  - Cachea SOLO assets estáticos same-origin (iconos, fuentes, _next/static/).
 //  - NO toca peticiones a la API (cross-origin) ni documentos HTML — esas
 //    van directo a la red. Esto evita el bug del v2 que servía respuestas
 //    rancias de /appointments y rompía el polling de la agenda.
 //  - Mantiene los handlers de push / notificationclick para que el admin
 //    reciba notificaciones cuando se crea un turno.
+//  - v5: "Confirmar turno" solo se ofrece en push de tipo appointment.created.
+//    Antes cualquier push con appointmentId (o con un tag UUID) era tratada
+//    como confirmable — una cancelación habría ofrecido confirmar el turno.
 
-const CACHE_NAME = "turno1min-v4";
+const CACHE_NAME = "turno1min-v5";
 const PRECACHE_URLS = ["/manifest.json"];
 
 self.addEventListener("install", (event) => {
@@ -96,7 +99,14 @@ self.addEventListener("push", (event) => {
 
   const title = payload.title || "Turno1Min";
   const data = payload.data || {};
-  const hasAppointment = !!(data.appointmentId && data.apiBase);
+  // Solo los turnos NUEVOS se confirman. Chequear el type además de los datos
+  // evita ofrecer "Confirmar" en una cancelación (o en cualquier tipo futuro
+  // que traiga appointmentId sin ser confirmable).
+  const hasAppointment = !!(
+    data.appointmentId &&
+    data.apiBase &&
+    (!data.type || data.type === "appointment.created")
+  );
 
   const actions = hasAppointment && supportsActions
     ? [{ action: "confirm", title: "✓ Confirmar turno" }]
@@ -199,10 +209,15 @@ self.addEventListener("notificationclick", (event) => {
   // Navegamos a la agenda con query params: la página hace el PATCH desde React,
   // que es más fiable que un fetch desde el SW en iOS.
   // Fallback de appointmentId: el tag del backend ya es el appointmentId UUID.
-  const appointmentId = data.appointmentId ||
-    (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(event.notification.tag)
-      ? event.notification.tag
-      : null);
+  // Ojo: esto solo vale para turnos nuevos — el tap NO debe confirmar nada en
+  // una cancelación. Por eso el type manda sobre el fallback del tag.
+  const confirmable = !data.type || data.type === "appointment.created";
+  const appointmentId = !confirmable
+    ? null
+    : data.appointmentId ||
+      (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(event.notification.tag)
+        ? event.notification.tag
+        : null);
 
   if (appointmentId) {
     const params = new URLSearchParams({ confirm: appointmentId });

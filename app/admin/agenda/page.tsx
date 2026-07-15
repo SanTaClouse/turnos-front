@@ -22,6 +22,7 @@ export default async function AgendaPage() {
       services={services.filter((s) => s.is_active)}
       tenantId={tenantId}
       tenantName={session.tenant.name}
+      tenantSlug={session.tenant.slug}
       timezone={session.tenant.timezone}
     />
   );

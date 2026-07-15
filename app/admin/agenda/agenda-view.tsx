@@ -12,6 +12,7 @@ import { expandFullDayBlocks } from "@/lib/blocked-dates";
 import { todayInTimezone, nowTimeInTimezone, addDays } from "@/lib/timezone-utils";
 import { useAdminStore } from "@/store/admin";
 import { AdminHeader } from "@/components/admin/admin-header";
+import { StoryShareButton } from "@/components/admin/story-share";
 import { BottomSheet } from "@/components/admin/bottom-sheet";
 import { FAB } from "@/components/admin/fab";
 import { ResourceAvatar } from "@/components/ui/resource-avatar";
@@ -1033,11 +1034,12 @@ function CreateApptSheet({ open, onClose, initialTime, services, resources, tena
 }
 
 // ─── Main: AgendaView ──────────────────────────────────────
-export function AgendaView({ resources, services, tenantId, tenantName, timezone }: {
+export function AgendaView({ resources, services, tenantId, tenantName, tenantSlug, timezone }: {
   resources: Resource[];
   services: Service[];
   tenantId: string;
   tenantName: string;
+  tenantSlug: string;
   timezone: string;
 }) {
   const { selectedDate, viewMode, resourceFilter, setDate, shiftDate, setViewMode, setResourceFilter } = useAdminStore();
@@ -1247,6 +1249,7 @@ export function AgendaView({ resources, services, tenantId, tenantName, timezone
         tenantId={tenantId}
         onEnablePushNotifications={requestPermission}
         isPushEnabled={isSubscribed}
+        rightAction={<StoryShareButton slug={tenantSlug} />}
       />
 
       {/* Date nav + view toggle */}

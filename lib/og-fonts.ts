@@ -15,6 +15,9 @@
 const GOOGLE_FONTS_CSS =
   "https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&display=swap";
 
+const INTER_TIGHT_CSS =
+  "https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;600&display=swap";
+
 type FontPair = { regular: ArrayBuffer; italic: ArrayBuffer | null };
 
 let cached: Promise<FontPair> | null = null;
@@ -48,6 +51,57 @@ async function resolveAndFetch(): Promise<FontPair> {
   ]);
 
   return { regular, italic };
+}
+
+type InterWeights = { regular: ArrayBuffer; semibold: ArrayBuffer | null };
+
+let interCached: Promise<InterWeights> | null = null;
+
+async function resolveAndFetchInter(): Promise<InterWeights> {
+  const cssRes = await fetch(INTER_TIGHT_CSS);
+  if (!cssRes.ok) throw new Error(`Inter Tight CSS ${cssRes.status}`);
+  const css = await cssRes.text();
+
+  // Google devuelve un @font-face por peso; los mapeamos por font-weight.
+  const byWeight = new Map<string, string>();
+  for (const block of css.split("@font-face").slice(1)) {
+    const urlMatch = block.match(/src:\s*url\(([^)]+)\)/);
+    const weightMatch = block.match(/font-weight:\s*(\d+)/);
+    if (urlMatch && weightMatch) byWeight.set(weightMatch[1], urlMatch[1]);
+  }
+
+  const regularUrl = byWeight.get("400");
+  if (!regularUrl) throw new Error("Inter Tight 400 URL no encontrada");
+  const semiboldUrl = byWeight.get("600");
+
+  const [regular, semibold] = await Promise.all([
+    fetch(regularUrl).then((r) => {
+      if (!r.ok) throw new Error(`Font fetch ${r.status}`);
+      return r.arrayBuffer();
+    }),
+    semiboldUrl
+      ? fetch(semiboldUrl).then((r) => (r.ok ? r.arrayBuffer() : null))
+      : Promise.resolve(null),
+  ]);
+
+  return { regular, semibold };
+}
+
+/**
+ * Inter Tight (400 + 600) en TTF para `ImageResponse`.
+ *
+ * Sin esto, cualquier texto con `fontFamily: "Inter Tight"` cae al fallback de
+ * Satori y termina renderizando en serif — que en una grilla de horarios se ve
+ * roto. Mismas restricciones que Instrument Serif: TTF, no woff2.
+ */
+export function loadInterTight(): Promise<InterWeights> {
+  if (!interCached) {
+    interCached = resolveAndFetchInter().catch((err) => {
+      interCached = null;
+      throw err;
+    });
+  }
+  return interCached;
 }
 
 /**

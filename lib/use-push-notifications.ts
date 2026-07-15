@@ -62,12 +62,13 @@ export function usePushNotifications(tenantId: string | null) {
         // Verificar si ya está suscrito
         let subscription = await registration.pushManager.getSubscription();
 
-        // Auto-reparación: si la suscripción quedó atada a una VAPID key
+        // Auto-reparación 1: si la suscripción quedó atada a una VAPID key
         // vieja, la damos de baja y creamos una nueva con la key vigente
         // (solo si el permiso ya está dado — acá no podemos pedirlo).
         const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
-        if (subscription && vapidKey) {
-          const currentKey = urlBase64ToUint8Array(vapidKey);
+        const currentKey = vapidKey ? urlBase64ToUint8Array(vapidKey) : null;
+
+        if (subscription && currentKey) {
           if (!subscriptionMatchesKey(subscription, currentKey)) {
             console.warn("Push subscription con VAPID key vieja — re-suscribiendo");
             await subscription.unsubscribe();
@@ -81,12 +82,23 @@ export function usePushNotifications(tenantId: string | null) {
           }
         }
 
-        setIsSubscribed(!!subscription);
-
-        // Si está suscrito, notificar al backend
-        if (subscription) {
+        // Auto-reparación 2: la VAPID key puede coincidir y la suscripción
+        // seguir muerta — el push service la dio de baja y el browser no se
+        // enteró. Solo el backend lo sabe, así que se lo preguntamos al
+        // guardarla; si dice que está muerta, re-suscribimos con un endpoint
+        // nuevo. Sin esto las push no vuelven nunca sin intervención manual.
+        if (subscription && currentKey) {
+          subscription = await resubscribeIfDead(
+            tenantId,
+            registration,
+            subscription,
+            currentKey,
+          );
+        } else if (subscription) {
           await savePushSubscription(tenantId, subscription);
         }
+
+        setIsSubscribed(!!subscription);
       } catch (error) {
         console.error("Error initializing push notifications:", error);
       }
@@ -167,7 +179,17 @@ export function usePushNotifications(tenantId: string | null) {
   };
 }
 
-async function savePushSubscription(tenantId: string, subscription: PushSubscription) {
+/**
+ * Guarda la suscripción en el backend.
+ *
+ * Devuelve `true` si el backend la aceptó, o `false` si respondió que ese
+ * endpoint ya está muerto (el push service lo dio de baja con 410). Ese `false`
+ * es la señal para re-suscribir: ver `resubscribeIfDead`.
+ */
+async function savePushSubscription(
+  tenantId: string,
+  subscription: PushSubscription,
+): Promise<boolean> {
   try {
     // IMPORTANTE: usar toJSON(), NO getKey().
     // getKey() devuelve ArrayBuffer y JSON.stringify lo serializa como {}
@@ -177,9 +199,9 @@ async function savePushSubscription(tenantId: string, subscription: PushSubscrip
     const json = subscription.toJSON();
     if (!json.endpoint || !json.keys?.p256dh || !json.keys?.auth) {
       console.error("Push subscription missing endpoint or keys", json);
-      return;
+      return false;
     }
-    await api.post("/notifications/subscribe", {
+    const res = await api.post<{ dead?: boolean }>("/notifications/subscribe", {
       tenant_id: tenantId,
       subscription: {
         endpoint: json.endpoint,
@@ -189,7 +211,46 @@ async function savePushSubscription(tenantId: string, subscription: PushSubscrip
         },
       },
     });
+    return !res?.dead;
   } catch (error) {
     console.error("Error saving push subscription:", error);
+    return false;
+  }
+}
+
+/**
+ * Rompe el bucle de "suscripción zombie".
+ *
+ * Cuando el push service da de baja un endpoint (410 Gone), el backend se
+ * entera pero el browser NO: sigue devolviendo la misma PushSubscription local
+ * para siempre. Sin esto, cada carga del admin la volvía a guardar, el backend
+ * la volvía a marcar muerta al primer envío, y las push no llegaban nunca más
+ * — en silencio, sin que el dueño viera nada raro (el toggle seguía "activado").
+ *
+ * La única salida es unsubscribe() + subscribe(): eso fuerza un endpoint nuevo.
+ */
+async function resubscribeIfDead(
+  tenantId: string,
+  registration: ServiceWorkerRegistration,
+  subscription: PushSubscription,
+  vapidKey: Uint8Array<ArrayBuffer>,
+): Promise<PushSubscription | null> {
+  const accepted = await savePushSubscription(tenantId, subscription);
+  if (accepted) return subscription;
+
+  if (Notification.permission !== "granted") return null;
+
+  console.warn("Push subscription dada de baja por el push service — re-suscribiendo");
+  try {
+    await subscription.unsubscribe();
+    const fresh = await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: vapidKey,
+    });
+    await savePushSubscription(tenantId, fresh);
+    return fresh;
+  } catch (error) {
+    console.error("Error re-suscribiendo push:", error);
+    return null;
   }
 }
